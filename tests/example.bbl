@@ -1,0 +1,171 @@
+\begin{thebibliography}{}
+
+\bibitem[\protect\citeauthoryear{Baker \bgroup \em et al.\egroup }{2022}]{vpt}
+Bowen Baker, Ilge Akkaya, Peter Zhokov, Joost Huizinga, Jie Tang, Adrien Ecoffet, Brandon Houghton, Raul Sampedro, and Jeff Clune.
+\newblock Video pretraining (vpt): Learning to act by watching unlabeled online videos.
+\newblock In S.~Koyejo, S.~Mohamed, A.~Agarwal, D.~Belgrave, K.~Cho, and A.~Oh, editors, {\em Advances in Neural Information Processing Systems}, volume~35, pages 24639--24654. Curran Associates, Inc., 2022.
+
+\bibitem[\protect\citeauthoryear{Chevalier-Boisvert \bgroup \em et al.\egroup }{2019}]{babyai_iclr19}
+Maxime Chevalier-Boisvert, Dzmitry Bahdanau, Salem Lahlou, Lucas Willems, Chitwan Saharia, Thien~Huu Nguyen, and Yoshua Bengio.
+\newblock Baby{AI}: First steps towards grounded language learning with a human in the loop.
+\newblock In {\em International Conference on Learning Representations}, 2019.
+
+\bibitem[\protect\citeauthoryear{Deng \bgroup \em et al.\egroup }{2023}]{deng2023mind2web}
+Xiang Deng, Yu~Gu, Boyuan Zheng, Shijie Chen, Samuel Stevens, Boshi Wang, Huan Sun, and Yu~Su.
+\newblock Mind2web: Towards a generalist agent for the web, 2023.
+
+\bibitem[\protect\citeauthoryear{Dubey \bgroup \em et al.\egroup }{2024}]{llama3}
+Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Amy Yang, Angela Fan, et~al.
+\newblock The llama 3 herd of models.
+\newblock {\em arXiv preprint arXiv:2407.21783}, 2024.
+
+\bibitem[\protect\citeauthoryear{Fan \bgroup \em et al.\egroup }{2022}]{minedojo}
+Linxi Fan, Guanzhi Wang, Yunfan Jiang, Ajay Mandlekar, Yuncong Yang, Haoyi Zhu, Andrew Tang, De-An Huang, Yuke Zhu, and Anima Anandkumar.
+\newblock Minedojo: Building open-ended embodied agents with internet-scale knowledge.
+\newblock {\em Advances in Neural Information Processing Systems}, 35:18343--18362, 2022.
+
+\bibitem[\protect\citeauthoryear{Guss \bgroup \em et al.\egroup }{2019}]{minerl}
+William~H Guss, Brandon Houghton, Nicholay Topin, Phillip Wang, Cayden Codel, Manuela Veloso, and Ruslan Salakhutdinov.
+\newblock Minerl: A large-scale dataset of minecraft demonstrations.
+\newblock {\em arXiv preprint arXiv:1907.13440}, 2019.
+
+\bibitem[\protect\citeauthoryear{Hu \bgroup \em et al.\egroup }{2021}]{hu2021loralowrankadaptationlarge}
+Edward~J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu~Wang, and Weizhu Chen.
+\newblock Lora: Low-rank adaptation of large language models, 2021.
+
+\bibitem[\protect\citeauthoryear{Huang \bgroup \em et al.\egroup }{2022}]{innermonologue}
+Wenlong Huang, Fei Xia, Ted Xiao, Harris Chan, Jacky Liang, Pete Florence, Andy Zeng, Jonathan Tompson, Igor Mordatch, Yevgen Chebotar, Pierre Sermanet, Noah Brown, Tomas Jackson, Linda Luu, Sergey Levine, Karol Hausman, and Brian Ichter.
+\newblock Inner monologue: Embodied reasoning through planning with language models.
+\newblock (arXiv:2207.05608), July 2022.
+\newblock arXiv:2207.05608 [cs].
+
+\bibitem[\protect\citeauthoryear{Lewis \bgroup \em et al.\egroup }{2020}]{rag}
+Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir Karpukhin, Naman Goyal, Heinrich Küttler, Mike Lewis, Wen-tau Yih, Tim Rocktäschel, Sebastian Riedel, and Douwe Kiela.
+\newblock Retrieval-augmented generation for knowledge-intensive nlp tasks.
+\newblock In H.~Larochelle, M.~Ranzato, R.~Hadsell, M.~F. Balcan, and H.~Lin, editors, {\em Advances in Neural Information Processing Systems}, volume~33, page 9459–9474. Curran Associates, Inc., 2020.
+
+\bibitem[\protect\citeauthoryear{Liu \bgroup \em et al.\egroup }{2018}]{miniwobb}
+Evan~Zheran Liu, Kelvin Guu, Panupong Pasupat, Tianlin Shi, and Percy Liang.
+\newblock Reinforcement learning on web interfaces using workflow-guided exploration.
+\newblock {\em arXiv preprint arXiv:1802.08802}, 2018.
+
+\bibitem[\protect\citeauthoryear{Liu \bgroup \em et al.\egroup }{2023}]{liu2023agentbench}
+Xiao Liu, Hao Yu, Hanchen Zhang, Yifan Xu, Xuanyu Lei, Hanyu Lai, Yu~Gu, Hangliang Ding, Kaiwen Men, Kejuan Yang, et~al.
+\newblock Agentbench: Evaluating llms as agents.
+\newblock {\em arXiv preprint arXiv:2308.03688}, 2023.
+
+\bibitem[\protect\citeauthoryear{Mialon \bgroup \em et al.\egroup }{2023}]{mialon2023gaia}
+Gr{\'e}goire Mialon, Cl{\'e}mentine Fourrier, Craig Swift, Thomas Wolf, Yann LeCun, and Thomas Scialom.
+\newblock Gaia: a benchmark for general ai assistants.
+\newblock {\em arXiv preprint arXiv:2311.12983}, 2023.
+
+\bibitem[\protect\citeauthoryear{Nakano \bgroup \em et al.\egroup }{2022}]{webgpt}
+Reiichiro Nakano, Jacob Hilton, Suchir Balaji, Jeff Wu, Long Ouyang, Christina Kim, Christopher Hesse, Shantanu Jain, Vineet Kosaraju, William Saunders, Xu~Jiang, Karl Cobbe, Tyna Eloundou, Gretchen Krueger, Kevin Button, Matthew Knight, Benjamin Chess, and John Schulman.
+\newblock Webgpt: Browser-assisted question-answering with human feedback.
+\newblock (arXiv:2112.09332), June 2022.
+\newblock arXiv:2112.09332 [cs].
+
+\bibitem[\protect\citeauthoryear{OpenAI}{2024}]{gpt4}
+OpenAI.
+\newblock Gpt-4 technical report.
+\newblock (arXiv:2303.08774), March 2024.
+\newblock arXiv:2303.08774 [cs].
+
+\bibitem[\protect\citeauthoryear{Parisi \bgroup \em et al.\egroup }{2022}]{talm}
+Aaron Parisi, Yao Zhao, and Noah Fiedel.
+\newblock Talm: Tool augmented language models.
+\newblock (arXiv:2205.12255), May 2022.
+\newblock arXiv:2205.12255 [cs].
+
+\bibitem[\protect\citeauthoryear{Patil \bgroup \em et al.\egroup }{2023}]{gorilla}
+Shishir~G. Patil, Tianjun Zhang, Xin Wang, and Joseph~E. Gonzalez.
+\newblock Gorilla: Large language model connected with massive apis.
+\newblock (arXiv:2305.15334), May 2023.
+\newblock arXiv:2305.15334 [cs].
+
+\bibitem[\protect\citeauthoryear{Prasad \bgroup \em et al.\egroup }{2023}]{prasad2023adapt}
+Archiki Prasad, Alexander Koller, Mareike Hartmann, Peter Clark, Ashish Sabharwal, Mohit Bansal, and Tushar Khot.
+\newblock Adapt: As-needed decomposition and planning with language models.
+\newblock {\em arXiv preprint arXiv:2311.05772}, 2023.
+
+\bibitem[\protect\citeauthoryear{Puig \bgroup \em et al.\egroup }{2018}]{puig2018virtualhome}
+Xavier Puig, Kevin Ra, Marko Boben, Jiaman Li, Tingwu Wang, Sanja Fidler, and Antonio Torralba.
+\newblock Virtualhome: Simulating household activities via programs.
+\newblock In {\em Proceedings of the IEEE conference on computer vision and pattern recognition}, pages 8494--8502, 2018.
+
+\bibitem[\protect\citeauthoryear{Schick \bgroup \em et al.\egroup }{2023}]{toolformer}
+Timo Schick, Jane Dwivedi-Yu, Roberto Dessi, Roberta Raileanu, Maria Lomeli, Eric Hambro, Luke Zettlemoyer, Nicola Cancedda, and Thomas Scialom.
+\newblock Toolformer: Language models can teach themselves to use tools.
+\newblock November 2023.
+
+\bibitem[\protect\citeauthoryear{Shinn \bgroup \em et al.\egroup }{2023}]{reflexion}
+Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik~R. Narasimhan, and Shunyu Yao.
+\newblock Reflexion: language agents with verbal reinforcement learning.
+\newblock November 2023.
+
+\bibitem[\protect\citeauthoryear{Shridhar \bgroup \em et al.\egroup }{2020}]{ALFRED20}
+Mohit Shridhar, Jesse Thomason, Daniel Gordon, Yonatan Bisk, Winson Han, Roozbeh Mottaghi, Luke Zettlemoyer, and Dieter Fox.
+\newblock {ALFRED: A Benchmark for Interpreting Grounded Instructions for Everyday Tasks}.
+\newblock In {\em The IEEE Conference on Computer Vision and Pattern Recognition (CVPR)}, 2020.
+
+\bibitem[\protect\citeauthoryear{Shridhar \bgroup \em et al.\egroup }{2021}]{alfworld}
+Mohit Shridhar, Xingdi Yuan, Marc-Alexandre C\^ot\'e, Yonatan Bisk, Adam Trischler, and Matthew Hausknecht.
+\newblock {ALFWorld: Aligning Text and Embodied Environments for Interactive Learning}.
+\newblock In {\em Proceedings of the International Conference on Learning Representations (ICLR)}, 2021.
+
+\bibitem[\protect\citeauthoryear{Wang \bgroup \em et al.\egroup }{2022a}]{wang2022scienceworld}
+Ruoyao Wang, Peter Jansen, Marc-Alexandre C{\^o}t{\'e}, and Prithviraj Ammanabrolu.
+\newblock Scienceworld: Is your agent smarter than a 5th grader?
+\newblock {\em arXiv preprint arXiv:2203.07540}, 2022.
+
+\bibitem[\protect\citeauthoryear{Wang \bgroup \em et al.\egroup }{2022b}]{selfconsistency}
+Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc~V. Le, Ed~H. Chi, Sharan Narang, Aakanksha Chowdhery, and Denny Zhou.
+\newblock Self-consistency improves chain of thought reasoning in language models.
+\newblock September 2022.
+
+\bibitem[\protect\citeauthoryear{Wang \bgroup \em et al.\egroup }{2023a}]{voyager}
+Guanzhi Wang, Yuqi Xie, Yunfan Jiang, Ajay Mandlekar, Chaowei Xiao, Yuke Zhu, Linxi Fan, and Anima Anandkumar.
+\newblock Voyager: An open-ended embodied agent with large language models.
+\newblock {\em arXiv preprint arXiv: Arxiv-2305.16291}, 2023.
+
+\bibitem[\protect\citeauthoryear{Wang \bgroup \em et al.\egroup }{2023b}]{jarvis}
+Zihao Wang, Shaofei Cai, Anji Liu, Yonggang Jin, Jinbing Hou, Bowei Zhang, Haowei Lin, Zhaofeng He, Zilong Zheng, Yaodong Yang, Xiaojian Ma, and Yitao Liang.
+\newblock Jarvis-1: Open-world multi-task agents with memory-augmented multimodal language models.
+\newblock {\em arXiv preprint arXiv: 2311.05997}, 2023.
+
+\bibitem[\protect\citeauthoryear{Xi \bgroup \em et al.\egroup }{2023}]{xi2023riseagentsurvey}
+Zhiheng Xi, Wenxiang Chen, Xin Guo, Wei He, Yiwen Ding, Boyang Hong, Ming Zhang, Junzhe Wang, Senjie Jin, Enyu Zhou, et~al.
+\newblock The rise and potential of large language model based agents: A survey.
+\newblock {\em arXiv preprint arXiv:2309.07864}, 2023.
+
+\bibitem[\protect\citeauthoryear{Xi \bgroup \em et al.\egroup }{2024}]{xi2024agentgym}
+Zhiheng Xi, Yiwen Ding, Wenxiang Chen, Boyang Hong, Honglin Guo, Junzhe Wang, Dingwen Yang, Chenyang Liao, Xin Guo, Wei He, Songyang Gao, Lu~Chen, Rui Zheng, Yicheng Zou, Tao Gui, Qi~Zhang, Xipeng Qiu, Xuanjing Huang, Zuxuan Wu, and Yu-Gang Jiang.
+\newblock Agentgym: Evolving large language model-based agents across diverse environments, 2024.
+
+\bibitem[\protect\citeauthoryear{Yang \bgroup \em et al.\egroup }{2023}]{gpt4tools}
+Rui Yang, Lin Song, Yanwei Li, Sijie Zhao, Yixiao Ge, Xiu Li, and Ying Shan.
+\newblock Gpt4tools: Teaching large language model to use tools via self-instruction.
+\newblock (arXiv:2305.18752), May 2023.
+\newblock arXiv:2305.18752 [cs].
+
+\bibitem[\protect\citeauthoryear{Yao \bgroup \em et al.\egroup }{2022}]{webshop}
+Shunyu Yao, Howard Chen, John Yang, and Karthik Narasimhan.
+\newblock Webshop: Towards scalable real-world web interaction with grounded language agents.
+\newblock In S.~Koyejo, S.~Mohamed, A.~Agarwal, D.~Belgrave, K.~Cho, and A.~Oh, editors, {\em Advances in Neural Information Processing Systems}, volume~35, pages 20744--20757. Curran Associates, Inc., 2022.
+
+\bibitem[\protect\citeauthoryear{Yao \bgroup \em et al.\egroup }{2023a}]{treeofthoughts}
+Shunyu Yao, Dian Yu, Jeffrey Zhao, Izhak Shafran, Tom Griffiths, Yuan Cao, and Karthik Narasimhan.
+\newblock Tree of thoughts: Deliberate problem solving with large language models.
+\newblock In A.~Oh, T.~Naumann, A.~Globerson, K.~Saenko, M.~Hardt, and S.~Levine, editors, {\em Advances in Neural Information Processing Systems}, volume~36, page 11809–11822. Curran Associates, Inc., 2023.
+
+\bibitem[\protect\citeauthoryear{Yao \bgroup \em et al.\egroup }{2023b}]{yao2023react}
+Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and Yuan Cao.
+\newblock {ReAct}: Synergizing reasoning and acting in language models.
+\newblock In {\em International Conference on Learning Representations (ICLR)}, 2023.
+
+\bibitem[\protect\citeauthoryear{Zhou \bgroup \em et al.\egroup }{2023}]{zhou2023webarena}
+Shuyan Zhou, Frank~F Xu, Hao Zhu, Xuhui Zhou, Robert Lo, Abishek Sridhar, Xianyi Cheng, Tianyue Ou, Yonatan Bisk, Daniel Fried, et~al.
+\newblock Webarena: A realistic web environment for building autonomous agents.
+\newblock {\em arXiv preprint arXiv:2307.13854}, 2023.
+
+\end{thebibliography}
