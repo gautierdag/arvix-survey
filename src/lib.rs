@@ -1,2 +1,3 @@
-// Re-export modules for external use
 pub mod latex;
+
+pub use latex::process_arxiv_paper;

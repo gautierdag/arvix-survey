@@ -1,11 +1,11 @@
-pub mod latex;
+// Import from lib.rs instead of declaring our own module
+use arvix_survey::latex::{Bibliography, process_arxiv_paper};
 
 use anyhow::{Context, Result};
 use clap::Parser;
 use log::info;
 use std::fs;
 use std::path::PathBuf;
-use latex::{Bibliography, process_arxiv_paper};
 
 /// CLI app for retrieving related work or background sections from arXiv papers
 #[derive(Parser)]
