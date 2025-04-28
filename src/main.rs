@@ -43,11 +43,16 @@ fn main() -> Result<()> {
     for paper_id in &args.paper_ids {
         info!("Processing arXiv paper with ID: {}", paper_id);
         // Download and process the paper
-        let paper = process_arxiv_paper(paper_id)?;
-        info!(
-            "Found {} sections with bibliography entries",
-            paper.sections.len()
-        );
+        let mut paper = process_arxiv_paper(paper_id)?;
+        // Verify bibliography
+        info!("Verifying bibliography entries for paper {}", paper_id);
+        let verified_count = paper.verify_bibliography()?;
+        info!("Verified {}/{} entries for paper {} using parallel verification", 
+                verified_count, 
+                paper.bibliography.iter().count(),
+                paper_id);
+        
+        info!("Found {} sections with bibliography entries", paper.sections.len());
         // Add paper to our collection
         all_papers.push(paper);
     }

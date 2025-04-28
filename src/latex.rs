@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 use std::fs;
 use log::info;
 use reqwest::blocking::Client;
-use std::fs::File;
 use std::io::{self, Read, Write, Seek, SeekFrom};
 use tempfile::TempDir;
 use zip::ZipArchive;
@@ -13,6 +12,38 @@ use tar::Archive;
 use std::collections::HashMap;
 use walkdir::WalkDir;
 use std::fmt;
+use serde_json::Value;
+use rayon::prelude::*;
+use std::sync::{Arc, Mutex};
+use once_cell::sync::Lazy;
+
+// Commonly used regex patterns compiled once
+static CITE_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\\(?:cite|citep|citet|citealp|citeauthor)\{([^}]+)\}").expect("Invalid citation regex pattern")
+});
+static ARXIV_ID_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"arXiv:?\s*([0-9]+\.[0-9]+)").expect("Invalid arXiv ID regex pattern")
+});
+static ARXIV_KEY_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^([0-9]{4}\.[0-9]+)$").expect("Invalid arXiv key regex pattern")
+});
+static BIBTEX_ENTRY_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"@([a-zA-Z]+)\{([^,]+),").expect("Invalid BibTeX entry regex pattern")
+});
+static BIBTEX_FIELD_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"([a-zA-Z]+)\s*=\s*\{([^{}]*((\{[^{}]*\})[^{}]*)*)\}").expect("Invalid BibTeX field regex pattern")
+});
+
+/// Helper function to clean text by removing punctuation and special characters
+fn clean_text(text: &str) -> String {
+    text.chars()
+        .map(|c| if c.is_alphanumeric() || c.is_whitespace() { c } else { ' ' })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<&str>>()
+        .join("_")
+        .to_lowercase()
+}
 
 /// Custom bibliography entry structure
 #[derive(Debug, Clone)]
@@ -260,84 +291,68 @@ impl Bibliography {
     
     /// Normalize a citation key based on BibEntry data
     pub fn normalize_citation_key(&self, entry: &BibEntry) -> String {
-        // Helper function to clean text by removing punctuation and special characters
-        fn clean_text(text: &str) -> String {
-            text.chars()
-                .map(|c| if c.is_alphanumeric() || c.is_whitespace() { c } else { ' ' })
-                .collect::<String>()
-                .split_whitespace()
-                .collect::<Vec<&str>>()
-                .join("_")
-                .to_lowercase()
-        }
-        
         // Get the author's last name (first author if multiple)
         let author = entry.get("author")
             .map(|authors| {
-                // First extract the first author
+                // Extract the first author
                 let first_author = if authors.contains(",") {
                     authors.split(",").next().unwrap_or(authors)
                 } else if authors.contains(" and ") {
                     authors.split(" and ").next().unwrap_or(authors)
-                } else{
+                } else {
                     authors
                 };
-                // print!("First author: {}", first_author);
-                // Check for "et al." format in the original string
-                let first_author = if first_author.contains("et al") {
-                    first_author.split("et al").next().unwrap_or(first_author).trim()
-                } else {
-                    first_author.trim()
-                };
-                // Clean the first author string
+                
+                // Remove "et al." if present
+                let first_author = first_author.split("et al")
+                    .next()
+                    .unwrap_or(first_author)
+                    .trim();
+                
+                // Clean and extract just the last name
                 let clean_first_author = clean_text(first_author);
-                // Extract just the last name
                 let words: Vec<&str> = clean_first_author.split('_').collect();
+                
+                // Return the last word (likely the last name) or the whole name if only one word
                 if words.len() > 1 {
-                    // Take the last word as the last name
                     words.last().unwrap_or(&"unknown").to_string()
                 } else {
-                    // If only one word, use that
                     clean_first_author
                 }
             })
             .unwrap_or_else(|| "unknown".to_string());
         
-        // Get the year and clean it
+        // Get the year
         let year = entry.get("year")
             .map(|y| clean_text(y))
             .unwrap_or_else(String::new);
         
-        // Get the first three significant words from title
+        // Get significant words from title
         let title_words = entry.get("title")
             .map(|title| {
-                // Clean the title by removing punctuation and special characters
                 let clean_title = clean_text(title);
                 
                 clean_title.split('_')
                     .filter(|w| w.len() > 3)  // Only keep significant words
                     .take(3)                  // Take at most 3 words
-                    .map(|s| s.to_string())   // Convert to owned strings
+                    .map(|s| s.to_string())
                     .collect::<Vec<String>>()
             })
             .unwrap_or_else(Vec::new);
         
-        // Format: lastname_word1_word2_word3_year
-        let mut result = author;
+        // Build the normalized key: lastname_word1_word2_word3_year
+        let mut key_parts = vec![author];
         
         // Add title words
-        for word in title_words {
-            result.push('_');
-            result.push_str(&word);
-        }
+        key_parts.extend(title_words);
         
-        // Add year at the end
+        // Add year at the end if available
         if !year.is_empty() {
-            result.push('_');
-            result.push_str(&year);
+            key_parts.push(year);
         }
         
-        result
+        // Join all parts with underscore
+        key_parts.join("_")
     }
     
     /// Normalize citation keys in LaTeX content
@@ -349,9 +364,7 @@ impl Bibliography {
         let mut key_map: HashMap<String, String> = HashMap::new();
         
         // Find all citations
-        let cite_re = Regex::new(r"\\(?:cite|citep|citet|citealp|citeauthor)\{([^}]+)\}")?;
-        
-        for cap in cite_re.captures_iter(content) {
+        for cap in CITE_REGEX.captures_iter(content) {
             let full_citation = cap.get(0).unwrap().as_str();
             let cite_command = full_citation.split('{').next().unwrap_or("");
             let cite_keys_str = cap.get(1).unwrap().as_str();
@@ -379,276 +392,307 @@ impl Bibliography {
         
         Ok((normalized_content, key_map))
     }
-}
-
-// Represents a section extracted from a LaTeX paper
-#[derive(Debug)]
-pub struct ExtractedSection {
-    pub title: String,                         // The title of the section
-    pub content: String,                       // The content of the section (raw LaTeX)
-    pub citations: Vec<String>,                // List of citations found in the section
-}
-
-/// Structure representing an arXiv paper with its associated files
-pub struct ArxivPaper {
-    pub id: String,                          // arXiv ID
-    pub sections: Vec<ExtractedSection>,     // extracted sections
-    pub bibliography: Bibliography,          // parsed bibliography
-    _temp_dir: TempDir,                      // Temporary directory (keep alive while the paper is used)
-}
-
-/// Find all BBL files in a directory
-pub fn find_bbl_files(dir: &Path) -> Result<Vec<PathBuf>> {
-    let bbl_files = WalkDir::new(dir)
-        .into_iter()
-        .filter_map(Result::ok)
-        .filter(|entry| {
-            entry.path().is_file() && 
-            entry.path().extension().map_or(false, |ext| ext == "bbl")
-        })
-        .map(|entry| entry.path().to_path_buf())
-        .collect();
     
-    Ok(bbl_files)
-}
-
-/// Download and process an arXiv paper
-pub fn download_arxiv_source(paper_id: &str) -> Result<ArxivPaper> {
-    let client = Client::new();
-    let url = format!("https://arxiv.org/e-print/{}", paper_id);
-
-    info!("Downloading source files from arXiv for paper: {}", paper_id);
-    let response = client.get(&url).send()?;
-
-    if !response.status().is_success() {
-        anyhow::bail!("Failed to download source: HTTP {}", response.status());
-    }
-
-    // Create temp directory to extract files
-    let temp_dir = TempDir::new()?;
-    let temp_path = temp_dir.path();
-
-    // Save the downloaded source to a temporary file
-    let mut source_file = tempfile::tempfile()?;
-    let content = response.bytes()?;
-    
-    if content.is_empty() {
-        anyhow::bail!("Received empty content from arXiv for paper ID: {}", paper_id);
-    }
-    
-    source_file.write_all(&content)?;
-    source_file.seek(SeekFrom::Start(0))?;
-
-    // Extract the archive
-    extract_archive(source_file, temp_path)?;
-    
-    // Find the main .tex file
-    let main_tex_file = find_main_tex_file(temp_path)?;
-    
-    // Extract all LaTeX content (use _ to indicate we're intentionally not using included_files)
-    let (full_content, _) = extract_all_latex_from_files(temp_path, &main_tex_file)?;
-    
-    // Find all .bbl files in the workspace
-    let bbl_files = find_bbl_files(temp_path)?;
-    
-    // Parse bibliography
-    let bibliography = Bibliography::parse_bibliography_files(&bbl_files)?;
-    
-    // Extract sections from the full content
-    let sections = extract_sections_from_latex(&full_content, &bibliography)?;
-
-    Ok(ArxivPaper {
-        id: paper_id.to_string(),
-        sections,
-        bibliography,
-        _temp_dir: temp_dir,
-    })
-}
-
-/// Extract archive (supports ZIP and TAR.GZ)
-fn extract_archive<R: Read + io::Seek>(mut archive: R, output_dir: &Path) -> Result<()> {
-    // Try to open as zip archive first
-    let mut buf = Vec::new();
-    archive.read_to_end(&mut buf)?;
-
-    if let Ok(mut zip) = ZipArchive::new(io::Cursor::new(&buf)) {
-        for i in 0..zip.len() {
-            let mut file = zip.by_index(i)?;
-            let outpath = output_dir.join(file.name());
-
-            if file.name().ends_with('/') {
-                fs::create_dir_all(&outpath)?;
-            } else {
-                if let Some(parent) = outpath.parent() {
-                    fs::create_dir_all(parent)?;
+    /// Query DBLP API for paper information based on paper title and author
+    pub fn query_dblp_api(&self, entry: &BibEntry) -> Result<Option<Value>> {
+        let client = Client::new();
+        
+        // Get paper title and clean it for search
+        let title = match entry.get("title") {
+            Some(t) => t,
+            None => return Ok(None), // No title, can't search
+        };
+        
+        // Clean the title a bit for better search
+        let clean_title = title.replace("{", "").replace("}", "");
+        
+        // URL encode the title for the query
+        let encoded_title = clean_title.replace(" ", "+");
+        let url = format!("https://dblp.org/search/publ/api?q={}&format=json", encoded_title);
+        
+        info!("Querying DBLP API for paper: {}", clean_title);
+        let response = client.get(&url).send()?;
+        if !response.status().is_success() {
+            log::warn!("DBLP API returned status {}", response.status());
+            return Ok(None);
+        }
+        
+        let json_response: Value = response.json()?;
+        
+        // Check if we have any results
+        if let Some(hit_count) = json_response
+            .get("result")
+            .and_then(|r| r.get("hits"))
+            .and_then(|h| h.get("@total"))
+            .and_then(|t| t.as_str())
+            .and_then(|s| s.parse::<i32>().ok())
+        {
+            if hit_count == 0 {
+                return Ok(None);
+            }
+            // Get the hits array
+            if let Some(hits) = json_response
+                .get("result")
+                .and_then(|r| r.get("hits"))
+                .and_then(|h| h.get("hit"))
+                .and_then(|h| h.as_array())
+            {
+                if !hits.is_empty() {
+                    return Ok(Some(json_response));
                 }
-                let mut outfile = File::create(&outpath)?;
-                io::copy(&mut file, &mut outfile)?;
             }
         }
-        return Ok(());
+        
+        Ok(None)
     }
-
-    // If not a zip, try as tar.gz
-    let gz = GzDecoder::new(io::Cursor::new(buf));
-    let mut archive = Archive::new(gz);
-    archive.unpack(output_dir)?;
-
-    Ok(())
-}
-
-/// Find the main LaTeX file in a directory
-pub fn find_main_tex_file(dir: &Path) -> Result<PathBuf> {
-    let mut tex_files = Vec::new();
-    // Recursively find all .tex files
-    for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
-        let path = entry.path();
-        if path.is_file() && path.extension().map_or(false, |ext| ext == "tex") {
-            tex_files.push(path.to_path_buf());
+    
+    /// Get BibTeX entry from arXiv for a given arXiv ID
+    pub fn get_arxiv_bibtex(&self, arxiv_id: &str) -> Result<Option<String>> {
+        let client = Client::new();
+        let url = format!("https://arxiv.org/bibtex/{}", arxiv_id);
+        
+        info!("Fetching BibTeX from arXiv for ID: {}", arxiv_id);
+        let response = client.get(&url).send()?;
+        
+        if !response.status().is_success() {
+            log::warn!("arXiv BibTeX service returned status {}", response.status());
+            return Ok(None);
         }
-    }
-    if tex_files.is_empty() {
-        anyhow::bail!("No .tex files found in the extracted archive.");
-    }
-    // Look for files that have \begin{document}
-    for tex_file in &tex_files {
-        if let Ok(content) = fs::read_to_string(tex_file) {
-            if !content.is_empty() && content.contains("\\begin{document}") {
-                return Ok(tex_file.clone());
-            }
+        
+        let content = response.text()?;
+        if content.contains("@") && content.contains("author") && content.contains("title") {
+            return Ok(Some(content));
         }
+        
+        Ok(None)
     }
-    // Look for files that have \documentclass
-    for tex_file in &tex_files {
-        if let Ok(content) = fs::read_to_string(tex_file) {
-            if !content.is_empty() && content.contains("\\documentclass") {
-                return Ok(tex_file.clone());
-            }
-        }
-    }
-    // Look for common main file names
-    let common_names = ["main.tex", "paper.tex", "article.tex", "manuscript.tex"];
-    for name in common_names {
-        for tex_file in &tex_files {
-            if tex_file.file_name().and_then(|f| f.to_str()) == Some(name) {
-                if let Ok(content) = fs::read_to_string(tex_file) {
-                    if !content.is_empty() {
-                        return Ok(tex_file.clone());
+    
+    /// Extract arXiv ID from a paper title or entry fields
+    pub fn extract_arxiv_id(&self, entry: &BibEntry) -> Option<String> {
+        // Check if the title or journal field contains "arXiv" followed by an ID pattern
+        let fields_to_check = ["title", "journal", "note", "raw"];
+        
+        for field in fields_to_check {
+            if let Some(content) = entry.get(field) {
+                // Look for the standard arXiv ID pattern
+                if let Some(captures) = ARXIV_ID_REGEX.captures(content) {
+                    if let Some(id_match) = captures.get(1) {
+                        return Some(id_match.as_str().to_string());
                     }
                 }
             }
         }
-    }
-    // Fallback: Return any non-empty .tex file
-    for tex_file in &tex_files {
-        if let Ok(content) = fs::read_to_string(tex_file) {
-            if !content.is_empty() {
-                return Ok(tex_file.clone());
+        
+        // Check if the key itself looks like an arXiv ID
+        if let Some(captures) = ARXIV_KEY_REGEX.captures(&entry.key) {
+            if let Some(id_match) = captures.get(1) {
+                return Some(id_match.as_str().to_string());
             }
         }
-    }
-    // Last resort: Just return the first .tex file
-    Ok(tex_files[0].clone())
-}
-
-/// Extract all LaTeX content from files including handling \input commands
-pub fn extract_all_latex_from_files(
-    base_dir: &Path,
-    main_tex_file: &Path,
-) -> Result<(String, Vec<PathBuf>)> {
-    let mut included_files = Vec::new();
-    let mut processed_files = Vec::new();
-    
-    // Process the main file
-    let content = extract_latex_content(base_dir, main_tex_file, &mut included_files, &mut processed_files)?;
-    
-    // Filter content to what's between \begin{document} and \end{document}
-    let doc_re = Regex::new(r"(?s)\\begin\{document\}(.*?)\\end\{document\}")?;
-    let filtered_content = match doc_re.captures(&content) {
-        Some(cap) => cap.get(1).map_or_else(|| content.clone(), |m| m.as_str().to_string()),
-        None => content,
-    };
-    
-    Ok((filtered_content, included_files))
-}
-
-/// Recursive helper function to extract LaTeX content
-fn extract_latex_content(
-    base_dir: &Path,
-    tex_file: &Path,
-    included_files: &mut Vec<PathBuf>,
-    processed_files: &mut Vec<PathBuf>,
-) -> Result<String> {
-    // Convert Path to PathBuf for comparison
-    let tex_file_path = tex_file.to_path_buf();
-    if processed_files.contains(&tex_file_path) {
-        return Ok(String::new()); // Skip already processed files to avoid infinite loops
-    }
-    
-    processed_files.push(tex_file_path);
-    
-    let content = fs::read_to_string(tex_file)?;
-    let mut result = content.clone();
-    
-    // Find all \input and \include commands
-    let input_re = Regex::new(r"\\input\{([^}]+)\}")?;
-    let include_re = Regex::new(r"\\include\{([^}]+)\}")?;
-    
-    // Process \input commands
-    let mut replacements = Vec::new();
-    
-    for cap in input_re.captures_iter(&content) {
-        let filename = cap.get(1).unwrap().as_str();
-        let file_path = resolve_input_path(base_dir, filename)?;
         
-        if let Some(path) = file_path {
-            included_files.push(path.clone());
-            let nested_content = extract_latex_content(base_dir, &path, included_files, processed_files)?;
-            replacements.push((cap.get(0).unwrap().as_str().to_string(), nested_content));
-        }
+        None
     }
     
-    // Process \include commands
-    for cap in include_re.captures_iter(&content) {
-        let filename = cap.get(1).unwrap().as_str();
-        let file_path = resolve_input_path(base_dir, filename)?;
+    /// Parse a BibTeX entry string into a BibEntry
+    fn parse_bibtex_entry(&self, bibtex: &str) -> Option<BibEntry> {
+        // Simple BibTeX parser for our needs
+        // Extract entry type and key 
+        let (entry_type, entry_key) = BIBTEX_ENTRY_REGEX.captures(bibtex).and_then(|caps| {
+            let etype = caps.get(1).map(|m| m.as_str().to_string())?;
+            let ekey = caps.get(2).map(|m| m.as_str().to_string())?;
+            Some((etype, ekey))
+        })?;
         
-        if let Some(path) = file_path {
-            included_files.push(path.clone());
-            let nested_content = extract_latex_content(base_dir, &path, included_files, processed_files)?;
-            replacements.push((cap.get(0).unwrap().as_str().to_string(), nested_content));
+        let mut entry = BibEntry::new(entry_key, entry_type);
+        
+        // Extract fields
+        for cap in BIBTEX_FIELD_REGEX.captures_iter(bibtex) {
+            if let (Some(field), Some(value)) = (cap.get(1), cap.get(2)) {
+                entry.set(field.as_str(), value.as_str().to_string());
+            }
+        }
+        
+        Some(entry)
+    }
+    
+    /// Find the best matching entry in DBLP results for a given entry
+    fn find_best_match_in_dblp(&self, dblp_results: &Value, entry: &BibEntry) -> Option<Value> {
+        let hits = dblp_results
+            .get("result")
+            .and_then(|r| r.get("hits"))
+            .and_then(|h| h.get("hit"))
+            .and_then(|h| h.as_array())?;
+        
+        let original_title = entry.get("title")?;
+        let original_year = entry.get("year")?;
+        
+        let mut best_match = None;
+        let mut best_score = 0;
+        
+        for hit in hits {
+            let info = hit.get("info")?;
+            // Extract title and year for comparison
+            let hit_title = info.get("title").and_then(|t| t.as_str())?;
+            let hit_year = info.get("year").and_then(|y| y.as_str())?;
+            // Simple scoring: +1 for matching year, +3 for having similar title
+            let mut score = 0;
+            // Year exact match
+            if hit_year == original_year {
+                score += 1;
+            }
+            // Title similarity (very basic - could be improved)
+            let clean_original = original_title.to_lowercase().replace("{", "").replace("}", "");
+            let clean_hit = hit_title.to_lowercase();
+            
+            if clean_original == clean_hit {
+                score += 3;
+            } else if clean_original.contains(&clean_hit) || clean_hit.contains(&clean_original) {
+                score += 2;
+            } else {
+                // Count matching words
+                let original_words: Vec<&str> = clean_original.split_whitespace().collect();
+                let hit_words: Vec<&str> = clean_hit.split_whitespace().collect();
+                
+                let matching_words = original_words.iter()
+                    .filter(|&word| hit_words.contains(word))
+                    .count();
+                
+                if matching_words > 2 {
+                    score += 1;
+                }
+            }
+            if score > best_score {
+                best_score = score;
+                best_match = Some(info.clone());
+            }
+        }
+        // Only return match if score is reasonable
+        if best_score >= 2 {
+            best_match
+        } else {
+            None
         }
     }
     
-    // Apply all replacements
-    for (pattern, replacement) in replacements {
-        result = result.replace(&pattern, &replacement);
-    }
     
-    Ok(result)
-}
+    /// Verify a single entry using both DBLP and arXiv APIs in parallel
+    pub fn verify_entry(&self, entry: &mut BibEntry) -> Result<bool> {
+        use rayon::prelude::*;
+        
+        // Define a function to verify entry from arXiv
+        let verify_from_arxiv = |entry: &BibEntry| -> Option<(String, BibEntry)> {
+            if let Some(arxiv_id) = self.extract_arxiv_id(entry) {
+                let temp_bib = Bibliography::new();
+                match temp_bib.get_arxiv_bibtex(&arxiv_id) {
+                    Ok(Some(bibtex)) => {
+                        if let Some(verified_entry) = temp_bib.parse_bibtex_entry(&bibtex) {
+                            return Some(("arXiv".to_string(), verified_entry));
+                        }
+                    },
+                    _ => {}
+                }
+            }
+            None
+        };
+        
+        // Define a function to verify entry from DBLP
+        let verify_from_dblp = |entry: &BibEntry| -> Option<(String, BibEntry)> {
+            let temp_bib = Bibliography::new();
+            match temp_bib.query_dblp_api(entry) {
+                Ok(Some(dblp_results)) => {
+                    if let Some(best_match) = temp_bib.find_best_match_in_dblp(&dblp_results, entry) {
+                        let mut dblp_entry = entry.clone();
+                        
+                        // Update fields from DBLP result
+                        if let Some(title) = best_match.get("title").and_then(|t| t.as_str()) {
+                            dblp_entry.set("title", title.to_string());
+                        }
+                        
+                        if let Some(year) = best_match.get("year").and_then(|y| y.as_str()) {
+                            dblp_entry.set("year", year.to_string());
+                        }
+                        
+                        if let Some(venue) = best_match.get("venue").and_then(|v| v.as_str()) {
+                            dblp_entry.set("booktitle", venue.to_string());
+                        }
 
-/// Resolve the path of an input file
-pub fn resolve_input_path(base_dir: &Path, filename: &str) -> Result<Option<PathBuf>> {
-    let mut file_path = base_dir.join(filename);
-    
-    // Check with no extension first
-    if file_path.exists() {
-        return Ok(Some(file_path));
-    }
-    
-    // Try with .tex extension
-    if !filename.ends_with(".tex") {
-        file_path = base_dir.join(format!("{}.tex", filename));
-        if file_path.exists() {
-            return Ok(Some(file_path));
+                        // url 
+                        if let Some(url) = best_match.get("url").and_then(|u| u.as_str()) {
+                            dblp_entry.set("url", url.to_string());
+                        }
+                        // volume
+                        if let Some(volume) = best_match.get("volume").and_then(|v| v.as_str()) {
+                            dblp_entry.set("volume", volume.to_string());
+                        }
+                        // doi
+                        if let Some(doi) = best_match.get("doi").and_then(|d| d.as_str()) {
+                            dblp_entry.set("doi", doi.to_string());
+                        }
+                        
+                        if let Some(authors) = best_match.get("authors")
+                            .and_then(|a| a.get("author"))
+                            .and_then(|a| a.as_array()) 
+                        {
+                            let author_names: Vec<String> = authors.iter()
+                                .filter_map(|a| a.get("text").and_then(|t| t.as_str()).map(|s| s.to_string()))
+                                .collect();
+                            
+                            if !author_names.is_empty() {
+                                // clean author names that have numbers after their names (e.g. "John Doe 001" -> "John Doe")
+                                let cleaned_authors: Vec<String> = author_names.iter()
+                                    .map(|name| {
+                                        let parts: Vec<&str> = name.split_whitespace().collect();
+                                        if parts.len() > 1 && parts.last().unwrap().chars().all(char::is_numeric) {
+                                            parts[..parts.len()-1].join(" ")
+                                        } else {
+                                            name.clone()
+                                        }
+                                    })
+                                    .collect();
+                                dblp_entry.set("author", cleaned_authors.join(" and "));
+                            }
+                        }
+                        
+                        dblp_entry.set("verified_source", "DBLP".to_string());
+                        return Some(("DBLP".to_string(), dblp_entry));
+                    }
+                },
+                _ => {}
+            }
+            None
+        };
+        
+        // Create a vector of verification functions
+        let entry_clone = entry.clone();
+        let result = [
+            verify_from_arxiv(&entry_clone),
+            verify_from_dblp(&entry_clone),
+        ]
+        .into_par_iter()
+        .filter_map(|result| result)
+        .collect::<Vec<(String, BibEntry)>>();
+        
+        if !result.is_empty() {
+            // Prioritize arXiv over DBLP if we have both
+            let (source, verified_entry) = result.iter()
+                .find(|(s, _)| s == "arXiv")
+                .unwrap_or(&result[0]);
+            
+            // Update the entry with verified information
+            for (field, value) in verified_entry.fields.iter() {
+                if field != "raw" {
+                    entry.set(field, value.clone());
+                }
+            }
+            entry.set("verified_source", source.clone());
+            
+            return Ok(true);
         }
+        
+        Ok(false)
     }
     
-    log::warn!("Could not find input file: {}", filename);
-    Ok(None)
 }
-
 
 pub fn related_work_section(section_title: &str) -> bool {
     let related_work_sections = [
@@ -658,15 +702,12 @@ pub fn related_work_section(section_title: &str) -> bool {
         "prior work",
         "previous work",
         "state of the art",
-        "comparison with existing approaches",
         "comparative analysis",
         "context",
         "existing work",
         "existing approaches",
         "existing methods",
-        "review of the literature",
-        "review of existing work",
-        "overview of related work",
+        "review of the literature",        
         "previous approaches",
         "foundation",
     ];
@@ -685,9 +726,23 @@ pub fn related_work_section(section_title: &str) -> bool {
 pub fn extract_sections_from_latex(content: &str, _bibliography: &Bibliography) -> Result<Vec<ExtractedSection>> {
     let mut sections = Vec::new();
     
-    // Split the content on section commands
-    let section_parts: Vec<&str> = content.split("\\section").skip(1).collect();
+    // Helper function to extract citations from text
+    let extract_citations = |text: &str| -> Vec<String> {
+        let mut citations = Vec::new();
+        for cite_cap in CITE_REGEX.captures_iter(text) {
+            let cite_keys = cite_cap.get(1).map_or("", |m| m.as_str());
+            for key in cite_keys.split(',') {
+                citations.push(key.trim().to_string());
+            }
+        }
+        // Remove duplicates
+        citations.sort();
+        citations.dedup();
+        citations
+    };
     
+    // Process sections
+    let section_parts: Vec<&str> = content.split("\\section").skip(1).collect();
     for section_text in section_parts {
         // Extract the section title from the part
         let title = extract_title_from_section(section_text)?;
@@ -701,19 +756,7 @@ pub fn extract_sections_from_latex(content: &str, _bibliography: &Bibliography) 
         let content = extract_content_from_section(section_text)?;
         
         // Extract citations from this section
-        let cite_re = Regex::new(r"\\(?:cite|citep|citet|citealp|citeauthor)\{([^}]+)\}")?;
-        let mut citations = Vec::new();
-        
-        for cite_cap in cite_re.captures_iter(&content) {
-            let cite_keys = cite_cap.get(1).map_or("", |m| m.as_str());
-            for key in cite_keys.split(',') {
-                citations.push(key.trim().to_string());
-            }
-        }
-        
-        // Remove duplicates
-        citations.sort();
-        citations.dedup();
+        let citations = extract_citations(&content);
         
         sections.push(ExtractedSection {
             title,
@@ -737,19 +780,7 @@ pub fn extract_sections_from_latex(content: &str, _bibliography: &Bibliography) 
         let content = extract_content_from_section(section_text)?;
         
         // Extract citations from this section
-        let cite_re = Regex::new(r"\\(?:cite|citep|citet|citealp|citeauthor)\{([^}]+)\}")?;
-        let mut citations = Vec::new();
-        
-        for cite_cap in cite_re.captures_iter(&content) {
-            let cite_keys = cite_cap.get(1).map_or("", |m| m.as_str());
-            for key in cite_keys.split(',') {
-                citations.push(key.trim().to_string());
-            }
-        }
-        
-        // Remove duplicates
-        citations.sort();
-        citations.dedup();
+        let citations = extract_citations(&content);
         
         sections.push(ExtractedSection {
             title,
@@ -813,4 +844,322 @@ pub fn process_arxiv_paper(paper_id: &str) -> Result<ArxivPaper> {
     let paper = download_arxiv_source(paper_id)?;
     // Return the paper with extracted sections
     Ok(paper)
+}
+
+#[derive(Debug)]
+pub struct ExtractedSection {
+    pub title: String,                         // The title of the section
+    pub content: String,                       // The content of the section (raw LaTeX)
+    pub citations: Vec<String>,                // List of citations found in the section
+}
+
+/// Structure representing an arXiv paper with its associated files
+pub struct ArxivPaper {
+    pub id: String,                          // arXiv ID
+    pub sections: Vec<ExtractedSection>,     // extracted sections
+    pub bibliography: Bibliography,          // parsed bibliography
+    _temp_dir: TempDir,                      // Temporary directory (keep alive while the paper is used)
+}
+
+impl ArxivPaper {
+    /// Verify bibliography entries using parallel processing for both sources (DBLP and arXiv simultaneously)
+    pub fn verify_bibliography(&mut self) -> Result<usize> {
+        info!("Verifying bibliography entries for paper {}", self.id);
+        
+        let keys: Vec<String> = self.bibliography.iter().map(|entry| entry.key.clone()).collect();
+        let entries_count = keys.len();
+        
+        // Create shared result container to collect verified entries
+        let verified_entries = Arc::new(Mutex::new(HashMap::new()));
+        let verification_count = Arc::new(Mutex::new(0usize));
+        
+        // Process entries in parallel
+        keys.par_iter().for_each(|key| {
+            if let Some(entry) = self.bibliography.get(key) {
+                let mut entry_clone = entry.clone();
+                
+                // Create a temporary bibliography instance to avoid borrowing issues
+                let temp_bib = Bibliography::new();
+                
+                match temp_bib.verify_entry(&mut entry_clone) {
+                    Ok(true) => {
+                        // Successfully verified
+                        let mut count = verification_count.lock().unwrap();
+                        *count += 1;
+                        
+                        // Store verified entry
+                        let mut entries = verified_entries.lock().unwrap();
+                        entries.insert(key.clone(), entry_clone);
+                        
+                        info!("Verified entry: {} (progress: {}/{})", key, *count, entries_count);
+                    },
+                    Ok(false) => {
+                        info!("Could not verify entry: {}", key);
+                    },
+                    Err(e) => {
+                        log::warn!("Error verifying entry {}: {}", key, e);
+                    }
+                }
+            }
+        });
+        
+        // Update the original entries with verified data
+        let verified = verified_entries.lock().unwrap();
+        for (key, verified_entry) in verified.iter() {
+            if let Some(entry) = self.bibliography.entries.get_mut(key) {
+                *entry = verified_entry.clone();
+            }
+        }
+        
+        let verified_count = *verification_count.lock().unwrap();
+        info!("Verified {}/{} bibliography entries using dual source parallel processing", 
+              verified_count, entries_count);
+        
+        Ok(verified_count)
+    }
+}
+
+/// Download and process an arXiv paper
+pub fn download_arxiv_source(paper_id: &str) -> Result<ArxivPaper> {
+    let client = Client::new();
+    let url = format!("https://arxiv.org/e-print/{}", paper_id);
+
+    info!("Downloading source files from arXiv for paper: {}", paper_id);
+    let response = client.get(&url).send()?;
+
+    if !response.status().is_success() {
+        anyhow::bail!("Failed to download source: HTTP {}", response.status());
+    }
+
+    // Create temp directory to extract files
+    let temp_dir = TempDir::new()?;
+    let temp_path = temp_dir.path();
+
+    // Save the downloaded source to a temporary file
+    let mut source_file = tempfile::tempfile()?;
+    let content = response.bytes()?;
+    
+    if content.is_empty() {
+        anyhow::bail!("Received empty content from arXiv for paper ID: {}", paper_id);
+    }
+    
+    source_file.write_all(&content)?;
+    source_file.seek(std::io::SeekFrom::Start(0))?;
+    
+    // Extract the archive
+    extract_archive(source_file, temp_path)?;
+    
+    // Find the main .tex file
+    let main_tex_file = find_main_tex_file(temp_path)?;
+    
+    // Extract all LaTeX content
+    let (full_content, _) = extract_all_latex_from_files(temp_path, &main_tex_file)?;
+    
+    // Find all .bbl files in the workspace
+    let bbl_files = find_bbl_files(temp_path)?;
+    
+    // Parse bibliography
+    let bibliography = Bibliography::parse_bibliography_files(&bbl_files)?;
+    
+    // Extract sections from the full content
+    let sections = extract_sections_from_latex(&full_content, &bibliography)?;
+
+    Ok(ArxivPaper {
+        id: paper_id.to_string(),
+        sections,
+        bibliography,
+        _temp_dir: temp_dir,
+    })
+}
+
+/// Extract archive (supports ZIP and TAR.GZ)
+fn extract_archive<R: Read + io::Seek>(mut archive: R, output_dir: &Path) -> Result<()> {
+    // Try to open as ZIP first
+    match ZipArchive::new(&mut archive) {
+        Ok(mut zip) => {
+            info!("Extracting ZIP archive");
+            for i in 0..zip.len() {
+                let mut file = zip.by_index(i)?;
+                let outpath = match file.enclosed_name() {
+                    Some(path) => output_dir.join(path),
+                    None => continue,
+                };
+
+                if file.name().ends_with('/') {
+                    fs::create_dir_all(&outpath)?;
+                } else {
+                    if let Some(p) = outpath.parent() {
+                        if !p.exists() {
+                            fs::create_dir_all(p)?;
+                        }
+                    }
+                    let mut outfile = fs::File::create(&outpath)?;
+                    io::copy(&mut file, &mut outfile)?;
+                }
+            }
+            return Ok(());
+        },
+        Err(_) => {
+            // Rewind the file
+            archive.seek(SeekFrom::Start(0))?;
+            
+            // Try as tar.gz
+            info!("Trying to extract as TAR.GZ archive");
+            let gz = GzDecoder::new(archive);
+            let mut tar = Archive::new(gz);
+            tar.unpack(output_dir)?;
+            return Ok(());
+        }
+    }
+}
+
+/// Find all BBL files in a directory
+pub fn find_bbl_files(dir: &Path) -> Result<Vec<PathBuf>> {
+    let bbl_files = WalkDir::new(dir)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry.path().is_file() && 
+            entry.path().extension().map_or(false, |ext| ext == "bbl")
+        })
+        .map(|entry| entry.path().to_path_buf())
+        .collect();
+    
+    Ok(bbl_files)
+}
+
+/// Find the main LaTeX file in a directory
+pub fn find_main_tex_file(dir: &Path) -> Result<PathBuf> {
+    // Look for common main file names
+    let common_names = ["main.tex", "paper.tex", "article.tex", "manuscript.tex"];
+    for name in &common_names {
+        let path = dir.join(name);
+        if path.exists() {
+            return Ok(path);
+        }
+    }
+    
+    // If no common names found, look for any .tex file with \documentclass
+    let tex_files: Vec<PathBuf> = WalkDir::new(dir)
+        .max_depth(2)  // Don't go too deep
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry.path().is_file() && 
+            entry.path().extension().map_or(false, |ext| ext == "tex")
+        })
+        .map(|entry| entry.path().to_path_buf())
+        .collect();
+    
+    // Check for files with \documentclass
+    for file in &tex_files {
+        if let Ok(content) = fs::read_to_string(file) {
+            if content.contains("\\documentclass") {
+                return Ok(file.clone());
+            }
+        }
+    }
+    
+    // If we still haven't found anything, just return the first .tex file
+    if !tex_files.is_empty() {
+        return Ok(tex_files[0].clone());
+    }
+    
+    anyhow::bail!("No LaTeX main file found in {:?}", dir)
+}
+
+/// Extract all LaTeX content from files including handling \input commands
+pub fn extract_all_latex_from_files(
+    base_dir: &Path,
+    main_tex_file: &Path,
+) -> Result<(String, Vec<PathBuf>)> {
+    let mut included_files = Vec::new();
+    let mut processed_files = Vec::new();
+    
+    let content = extract_latex_content(
+        base_dir,
+        main_tex_file,
+        &mut included_files,
+        &mut processed_files,
+    )?;
+    
+    Ok((content, included_files))
+}
+
+/// Recursive helper function to extract LaTeX content
+fn extract_latex_content(
+    base_dir: &Path,
+    tex_file: &Path,
+    included_files: &mut Vec<PathBuf>,
+    processed_files: &mut Vec<PathBuf>,
+) -> Result<String> {
+    // Avoid processing the same file twice
+    if processed_files.iter().any(|p| p == tex_file) {
+        return Ok(String::new());
+    }
+    
+    // Mark this file as processed
+    processed_files.push(tex_file.to_path_buf());
+    
+    // Add to included_files (excluding the main file which is the first one processed)
+    if processed_files.len() > 1 {
+        included_files.push(tex_file.to_path_buf());
+    }
+    
+    // Read the file content
+    let content = fs::read_to_string(tex_file)?;
+    
+    // Look for \input and \include commands
+    let mut result = String::new();
+    let input_re = Regex::new(r"\\(input|include)\{([^}]+)\}")?;
+    
+    let mut last_end = 0;
+    for cap in input_re.captures_iter(&content) {
+        let full_match = cap.get(0).unwrap();
+        // Add the content before this match
+        result.push_str(&content[last_end..full_match.start()]);
+        last_end = full_match.end();
+        
+        // Extract the filename
+        let filename = cap.get(2).unwrap().as_str();
+        
+        // Resolve the path
+        if let Ok(Some(input_path)) = resolve_input_path(base_dir, filename) {
+            // Recursively process the included file
+            let included_content = extract_latex_content(
+                base_dir,
+                &input_path,
+                included_files,
+                processed_files,
+            )?;
+            // Add the included content
+            result.push_str(&included_content);
+        }
+    }
+    
+    // Add any remaining content
+    result.push_str(&content[last_end..]);
+    
+    Ok(result)
+}
+
+/// Resolve the path of an input file
+pub fn resolve_input_path(base_dir: &Path, filename: &str) -> Result<Option<PathBuf>> {
+    // Check if the file exists as is
+    let direct_path = base_dir.join(filename);
+    if direct_path.exists() && direct_path.is_file() {
+        return Ok(Some(direct_path));
+    }
+    
+    // Try adding .tex extension if not present
+    if !filename.ends_with(".tex") {
+        let with_extension = format!("{}.tex", filename);
+        let path_with_extension = base_dir.join(&with_extension);
+        if path_with_extension.exists() && path_with_extension.is_file() {
+            return Ok(Some(path_with_extension));
+        }
+    }
+    
+    // Not found
+    Ok(None)
 }

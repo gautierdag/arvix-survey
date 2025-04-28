@@ -293,4 +293,31 @@ Main file content
         // Verify we tracked all included files
         assert_eq!(included_files.len(), 3);
     }
+
+    #[test]
+    fn test_verify_entry() {
+        use arvix_survey::latex::{Bibliography, BibEntry};
+        
+        let bib = Bibliography::new();
+        
+        // Create a test entry with arXiv reference
+        let mut entry = BibEntry::new("test_key".to_string(), "article".to_string());
+        entry.set("title", "The rise and potential of large language model based agents: A survey".to_string());
+        entry.set("author", "Zhiheng Xi et al.".to_string());
+        entry.set("journal", "arXiv preprint arXiv:2309.07864".to_string());
+        entry.set("year", "2023".to_string());
+        
+        // Test verification
+        let mut entry_clone = entry.clone();
+        let verified = bib.verify_entry(&mut entry_clone).expect("Failed to verify entry");
+        
+        // Check that verification succeeded
+        assert!(verified);
+        assert_eq!(entry_clone.get("verified_source"), Some(&"arXiv".to_string()));
+        
+        // Verify fields were updated
+        assert!(entry_clone.get("author").is_some());
+        assert!(entry_clone.get("title").is_some());
+        assert!(entry_clone.get("year").is_some());
+    }
 }
