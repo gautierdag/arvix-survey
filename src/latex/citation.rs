@@ -1,5 +1,7 @@
 use anyhow::Result;
+use crate::error::BibExtractError;
 use regex::Regex;
+
 use std::collections::HashMap;
 
 use crate::latex::{Bibliography, CITE_REGEX};
@@ -41,7 +43,7 @@ pub fn related_work_section(section_title: &str) -> bool {
 }
 
 /// Extract sections from LaTeX content
-pub fn extract_sections_from_latex(content: &str, _bibliography: &Bibliography) -> Result<Vec<ExtractedSection>> {
+pub fn extract_sections_from_latex(content: &str, _bibliography: &Bibliography) -> Result<Vec<ExtractedSection>, BibExtractError> {
     let mut sections = Vec::new();
     
     // Helper function to extract citations from text
@@ -111,9 +113,9 @@ pub fn extract_sections_from_latex(content: &str, _bibliography: &Bibliography) 
 }
 
 /// Helper function to extract section title from a section text
-fn extract_title_from_section(section_text: &str) -> Result<String> {
+fn extract_title_from_section(section_text: &str) -> Result<String, BibExtractError> {
     // Use regex to extract title from the beginning of the text
-    let title_re = Regex::new(r"^\s*\{([^}]*)\}")?;
+    let title_re = Regex::new(r"^\s*\{([^}]*)\}").map_err(|e| BibExtractError::ApiError(e.to_string()))?;
     
     if let Some(cap) = title_re.captures(section_text) {
         if let Some(title_match) = cap.get(1) {
@@ -135,9 +137,9 @@ fn extract_title_from_section(section_text: &str) -> Result<String> {
 }
 
 /// Helper function to extract content from a section text (everything after the title)
-fn extract_content_from_section(section_text: &str) -> Result<String> {
+fn extract_content_from_section(section_text: &str) -> Result<String, BibExtractError> {
     // Extract content after the title
-    let title_re = Regex::new(r"^\s*\{[^}]*\}")?;
+    let title_re = Regex::new(r"^\s*\{[^}]*\}").map_err(|e| BibExtractError::ApiError(e.to_string()))?;
     
     if let Some(title_match) = title_re.find(section_text) {
         let content_start = title_match.end();
@@ -161,7 +163,7 @@ fn extract_content_from_section(section_text: &str) -> Result<String> {
 pub fn normalize_citations(
     bibliography: &Bibliography,
     content: &str
-) -> Result<(String, HashMap<String, String>)> {
+) -> Result<(String, HashMap<String, String>), BibExtractError> {
     let mut normalized_content = content.to_string();
     let mut key_map: HashMap<String, String> = HashMap::new();
     

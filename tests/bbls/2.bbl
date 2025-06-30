@@ -1,0 +1,37 @@
+\begin{thebibliography}{135}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Acemoglu and Restrepo(2018)]{acemoglu2018artificial}
+Daron Acemoglu and Pascual Restrepo.
+\newblock Artificial intelligence, automation, and work.
+\newblock In \emph{The economics of artificial intelligence: An agenda}, pages
+  197--236. University of Chicago Press, 2018.
+
+\bibitem[Ainslie et~al.(2023)Ainslie, Lee-Thorp, de~Jong, Zemlyanskiy, Lebrón,
+  and Sanghai]{gqa2023}
+Joshua Ainslie, James Lee-Thorp, Michiel de~Jong, Yury Zemlyanskiy, Federico
+  Lebrón, and Sumit Sanghai.
+\newblock Gqa: Training generalized multi-query transformer models from
+  multi-head checkpoints, 2023.
+
+\bibitem[Almazrouei et~al.(2023)Almazrouei, Alobeidli, Alshamsi, Cappelli,
+  Cojocaru, Debbah, Goffinet, Heslow, Launay, Malartic, Noune, Pannier, and
+  Penedo]{falcon40b}
+Ebtesam Almazrouei, Hamza Alobeidli, Abdulaziz Alshamsi, Alessandro Cappelli,
+  Ruxandra Cojocaru, Merouane Debbah, Etienne Goffinet, Daniel Heslow, Julien
+  Launay, Quentin Malartic, Badreddine Noune, Baptiste Pannier, and Guilherme
+  Penedo.
+\newblock {Falcon-40B}: an open large language model with state-of-the-art
+  performance.
+\newblock 2023.
+
+\bibitem[Zhuo et~al.(2023)Zhuo, Huang, Chen, and Xing]{zhuo2023exploring}
+Terry~Yue Zhuo, Yujin Huang, Chunyang Chen, and Zhenchang Xing.
+\newblock Exploring ai ethics of chatgpt: A diagnostic analysis.
+\newblock \emph{arXiv preprint arXiv:2301.12867}, 2023.
+
+\end{thebibliography}

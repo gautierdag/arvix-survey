@@ -1,23 +1,26 @@
-// Import from lib.rs instead of declaring our own module
-use arvix_survey::latex::{Bibliography, process_arxiv_paper};
-
 use anyhow::{Context, Result};
 use clap::Parser;
 use log::info;
 use std::fs;
 use std::path::PathBuf;
 
-/// CLI app for retrieving related work or background sections from arXiv papers
+// Use the shared internal function from the library crate.
+use bibextract::extract_survey_internal;
+
+/// A CLI for extracting survey content and bibliography from arXiv papers.
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// arXiv paper IDs (e.g., 2104.08653)
-    #[arg(short, long)]
+    /// A list of arXiv paper IDs (e.g., '2104.08653').
+    #[arg(short, long, required = true)]
     paper_ids: Vec<String>,
-    /// Output file (prints to stdout if not specified)
+
+    /// The base path for the output files (e.g., 'survey').
+    /// This will create 'survey.tex' and 'survey.bib'.
     #[arg(short, long)]
     output: Option<PathBuf>,
-    /// Verbose logging
+
+    /// Enable verbose logging to see detailed processing steps.
     #[arg(short, long)]
     verbose: bool,
 }
@@ -25,70 +28,38 @@ struct Args {
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    // Configure logging
-    if args.verbose {
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
-    } else {
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    }
+    // Configure logging based on the verbosity flag.
+    let log_level = if args.verbose { "debug" } else { "info" };
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(log_level)).init();
 
-    if args.paper_ids.is_empty() {
-        anyhow::bail!("No paper IDs provided. Use --paper-ids option to specify at least one arXiv ID.");
-    }
+    // Use the shared internal function to process papers.
+    match extract_survey_internal(args.paper_ids) {
+        Ok((survey_text, bibtex)) => {
+            // Handle file output.
+            if let Some(output_path) = args.output {
+                // Create the .tex file.
+                let tex_path = output_path.with_extension("tex");
+                fs::write(&tex_path, survey_text).with_context(|| format!("Failed to write to {:?}", tex_path))?;
+                info!("Survey content written to {:?}", tex_path);
 
-    let mut all_papers = Vec::new();
-    let mut consolidated_bibliography = Bibliography::new();
-
-    // Process each paper
-    for paper_id in &args.paper_ids {
-        info!("Processing arXiv paper with ID: {}", paper_id);
-        // Download and process the paper
-        let mut paper = process_arxiv_paper(paper_id)?;
-        // Verify bibliography
-        info!("Verifying bibliography entries for paper {}", paper_id);
-        let verified_count = paper.verify_bibliography()?;
-        info!("Verified {}/{} entries for paper {} using parallel verification", 
-                verified_count, 
-                paper.bibliography.iter().count(),
-                paper_id);
-        
-        info!("Found {} sections with bibliography entries", paper.sections.len());
-        // Add paper to our collection
-        all_papers.push(paper);
-    }
-
-    // Merge bibliographies from all papers
-    for paper in &all_papers {
-        for entry in paper.bibliography.iter() {
-            consolidated_bibliography.insert(entry.clone());
+                // Create the .bib file.
+                let bib_path = output_path.with_extension("bib");
+                fs::write(&bib_path, bibtex).with_context(|| format!("Failed to write to {:?}", bib_path))?;
+                info!("Bibliography written to {:?}", bib_path);
+            } else {
+                // If no output path is provided, print to stdout, separating the files.
+                println!("--- survey.tex ---");
+                println!("{}", survey_text);
+                println!("--- bibliography.bib ---");
+                println!("{}", bibtex);
+            }
         }
-    }
-
-    // Process and format all sections with the consolidated bibliography
-    let mut output = String::new();
-    for paper in &all_papers {
-        for section in &paper.sections {
-            // Add section header and content as raw LaTeX
-            output.push_str(&format!("\\section{{{}}}\n\n", section.title));
-            // Normalize citations in the content
-            let (normalized_content, _) = consolidated_bibliography.normalize_citations(&section.content)?;
-            // Add raw LaTeX content
-            output.push_str(&normalized_content);
-            output.push_str("\n\n");
+        Err(e) => {
+            log::error!("{}", e);
+            std::process::exit(1);
         }
-    }
-
-    // Add bibliography section in LaTeX format
-    output.push_str(&consolidated_bibliography.to_string());
-
-    // Write output to file or stdout
-    if let Some(output_file) = &args.output {
-        fs::write(output_file, output)
-            .with_context(|| format!("Failed to write output to {:?}", output_file))?;
-        info!("Output written to {:?}", output_file);
-    } else {
-        println!("{}", output);
     }
 
     Ok(())
 }
+

@@ -1,0 +1,42 @@
+\begin{thebibliography}{}
+
+\bibitem[\protect\citeauthoryear{Baker \bgroup \em et al.\egroup }{2022}]{vpt}
+Bowen Baker, Ilge Akkaya, Peter Zhokov, Joost Huizinga, Jie Tang, Adrien Ecoffet, Brandon Houghton, Raul Sampedro, and Jeff Clune.
+\newblock Video pretraining (vpt): Learning to act by watching unlabeled online videos.
+\newblock In S.~Koyejo, S.~Mohamed, A.~Agarwal, D.~Belgrave, K.~Cho, and A.~Oh, editors, {\em Advances in Neural Information Processing Systems}, volume~35, pages 24639--24654. Curran Associates, Inc., 2022.
+
+\bibitem[\protect\citeauthoryear{Chevalier-Boisvert \bgroup \em et al.\egroup }{2019}]{babyai_iclr19}
+Maxime Chevalier-Boisvert, Dzmitry Bahdanau, Salem Lahlou, Lucas Willems, Chitwan Saharia, Thien~Huu Nguyen, and Yoshua Bengio.
+\newblock Baby{AI}: First steps towards grounded language learning with a human in the loop.
+\newblock In {\em International Conference on Learning Representations}, 2019.
+
+\bibitem[\protect\citeauthoryear{Deng \bgroup \em et al.\egroup }{2023}]{deng2023mind2web}
+Xiang Deng, Yu~Gu, Boyuan Zheng, Shijie Chen, Samuel Stevens, Boshi Wang, Huan Sun, and Yu~Su.
+\newblock Mind2web: Towards a generalist agent for the web, 2023.
+
+\bibitem[\protect\citeauthoryear{Dubey \bgroup \em et al.\egroup }{2024}]{llama3}
+Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Amy Yang, Angela Fan, et~al.
+\newblock The llama 3 herd of models.
+\newblock {\em arXiv preprint arXiv:2407.21783}, 2024.
+
+\bibitem[\protect\citeauthoryear{Fan \bgroup \em et al.\egroup }{2022}]{minedojo}
+Linxi Fan, Guanzhi Wang, Yunfan Jiang, Ajay Mandlekar, Yuncong Yang, Haoyi Zhu, Andrew Tang, De-An Huang, Yuke Zhu, and Anima Anandkumar.
+\newblock Minedojo: Building open-ended embodied agents with internet-scale knowledge.
+\newblock {\em Advances in Neural Information Processing Systems}, 35:18343--18362, 2022.
+
+\bibitem[\protect\citeauthoryear{Guss \bgroup \em et al.\egroup }{2019}]{minerl}
+William~H Guss, Brandon Houghton, Nicholay Topin, Phillip Wang, Cayden Codel, Manuela Veloso, and Ruslan Salakhutdinov.
+\newblock Minerl: A large-scale dataset of minecraft demonstrations.
+\newblock {\em arXiv preprint arXiv:1907.13440}, 2019.
+
+\bibitem[\protect\citeauthoryear{Hu \bgroup \em et al.\egroup }{2021}]{hu2021loralowrankadaptationlarge}
+Edward~J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu~Wang, and Weizhu Chen.
+\newblock Lora: Low-rank adaptation of large language models, 2021.
+
+\bibitem[\protect\citeauthoryear{Huang \bgroup \em et al.\egroup }{2022}]{innermonologue}
+Wenlong Huang, Fei Xia, Ted Xiao, Harris Chan, Jacky Liang, Pete Florence, Andy Zeng, Jonathan Tompson, Igor Mordatch, Yevgen Chebotar, Pierre Sermanet, Noah Brown, Tomas Jackson, Linda Luu, Sergey Levine, Karol Hausman, and Brian Ichter.
+\newblock Inner monologue: Embodied reasoning through planning with language models.
+\newblock (arXiv:2207.05608), July 2022.
+\newblock arXiv:2207.05608 [cs].
+
+\end{thebibliography}

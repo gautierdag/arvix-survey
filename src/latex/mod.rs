@@ -1,4 +1,7 @@
-// Export all submodules
+use log::{info};
+use once_cell::sync::Lazy;
+use regex::Regex;
+
 pub mod bibliography;
 pub mod citation;
 pub mod parser;
@@ -7,11 +10,7 @@ pub mod verification;
 // Re-export commonly used types
 pub use bibliography::{Bibliography, BibEntry, BibEntryBuilder};
 pub use citation::ExtractedSection;
-pub use parser::{process_arxiv_paper, download_arxiv_source, find_bbl_files, extract_all_latex_from_files, resolve_input_path};
-
-// Import regex dependencies
-use once_cell::sync::Lazy;
-use regex::Regex;
+pub use parser::{download_arxiv_source, find_bbl_files, extract_all_latex_from_files, resolve_input_path, extract_sections};
 
 // Commonly used regex patterns compiled once
 pub static CITE_REGEX: Lazy<Regex> = Lazy::new(|| {

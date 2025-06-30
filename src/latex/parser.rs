@@ -1,6 +1,8 @@
 use anyhow::Result;
 use log::info;
-use regex::Regex;
+use regex::{Regex, RegexSet};
+use crate::error::BibExtractError;
+
 use std::fs;
 use std::io::{self, Read, Write, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -14,31 +16,31 @@ use reqwest::blocking::Client;
 use crate::latex::{Bibliography, ArxivPaper, citation};
 
 /// Download and process an arXiv paper
-pub fn download_arxiv_source(paper_id: &str) -> Result<ArxivPaper> {
+pub fn download_arxiv_source(paper_id: &str) -> Result<ArxivPaper, BibExtractError> {
     let client = Client::new();
     let url = format!("https://arxiv.org/e-print/{}", paper_id);
 
     info!("Downloading source files from arXiv for paper: {}", paper_id);
-    let response = client.get(&url).send()?;
+    let response = client.get(&url).send().map_err(|e| BibExtractError::NetworkError(e))?;
 
     if !response.status().is_success() {
-        anyhow::bail!("Failed to download source: HTTP {}", response.status());
+        return Err(BibExtractError::ApiError(format!("Failed to download source: HTTP {}", response.status())));
     }
 
     // Create temp directory to extract files
-    let temp_dir = TempDir::new()?;
+    let temp_dir = TempDir::new().map_err(|e| BibExtractError::IoError(e))?;
     let temp_path = temp_dir.path();
 
     // Save the downloaded source to a temporary file
-    let mut source_file = tempfile::tempfile()?;
-    let content = response.bytes()?;
+    let mut source_file = tempfile::tempfile().map_err(|e| BibExtractError::IoError(e))?;
+    let content = response.bytes().map_err(|e| BibExtractError::NetworkError(e))?;
     
     if content.is_empty() {
-        anyhow::bail!("Received empty content from arXiv for paper ID: {}", paper_id);
+        return Err(BibExtractError::ApiError(format!("Received empty content from arXiv for paper ID: {}", paper_id)));
     }
     
-    source_file.write_all(&content)?;
-    source_file.seek(std::io::SeekFrom::Start(0))?;
+    source_file.write_all(&content).map_err(|e| BibExtractError::IoError(e))?;
+    source_file.seek(std::io::SeekFrom::Start(0)).map_err(|e| BibExtractError::IoError(e))?;
     
     // Extract the archive
     extract_archive(source_file, temp_path)?;
@@ -66,57 +68,50 @@ pub fn download_arxiv_source(paper_id: &str) -> Result<ArxivPaper> {
     })
 }
 
-/// Process a paper from arXiv
-pub fn process_arxiv_paper(paper_id: &str) -> Result<ArxivPaper> {
-    // Download and extract paper
-    let paper = download_arxiv_source(paper_id)?;
-    // Return the paper with extracted sections
-    Ok(paper)
-}
 
 /// Extract archive (supports ZIP and TAR.GZ)
-fn extract_archive<R: Read + io::Seek>(mut archive: R, output_dir: &Path) -> Result<()> {
+fn extract_archive<R: Read + io::Seek>(mut archive: R, output_dir: &Path) -> Result<(), BibExtractError> {
     // Try to open as ZIP first
     match ZipArchive::new(&mut archive) {
         Ok(mut zip) => {
             info!("Extracting ZIP archive");
             for i in 0..zip.len() {
-                let mut file = zip.by_index(i)?;
+                let mut file = zip.by_index(i).map_err(|e| BibExtractError::ZipError(e))?;
                 let outpath = match file.enclosed_name() {
                     Some(path) => output_dir.join(path),
                     None => continue,
                 };
 
                 if file.name().ends_with('/') {
-                    fs::create_dir_all(&outpath)?;
+                    fs::create_dir_all(&outpath).map_err(|e| BibExtractError::IoError(e))?;
                 } else {
                     if let Some(p) = outpath.parent() {
                         if !p.exists() {
-                            fs::create_dir_all(p)?;
+                            fs::create_dir_all(p).map_err(|e| BibExtractError::IoError(e))?;
                         }
                     }
-                    let mut outfile = fs::File::create(&outpath)?;
-                    io::copy(&mut file, &mut outfile)?;
+                    let mut outfile = fs::File::create(&outpath).map_err(|e| BibExtractError::IoError(e))?;
+                    io::copy(&mut file, &mut outfile).map_err(|e| BibExtractError::IoError(e))?;
                 }
             }
             return Ok(());
         },
         Err(_) => {
             // Rewind the file
-            archive.seek(SeekFrom::Start(0))?;
+            archive.seek(SeekFrom::Start(0)).map_err(|e| BibExtractError::IoError(e))?;
             
             // Try as tar.gz
             info!("Trying to extract as TAR.GZ archive");
             let gz = GzDecoder::new(archive);
             let mut tar = Archive::new(gz);
-            tar.unpack(output_dir)?;
+            tar.unpack(output_dir).map_err(|e| BibExtractError::IoError(e))?;
             return Ok(());
         }
     }
 }
 
 /// Find all BBL files in a directory
-pub fn find_bbl_files(dir: &Path) -> Result<Vec<PathBuf>> {
+pub fn find_bbl_files(dir: &Path) -> Result<Vec<PathBuf>, BibExtractError> {
     let bbl_files = WalkDir::new(dir)
         .into_iter()
         .filter_map(Result::ok)
@@ -131,7 +126,7 @@ pub fn find_bbl_files(dir: &Path) -> Result<Vec<PathBuf>> {
 }
 
 /// Find the main LaTeX file in a directory
-pub fn find_main_tex_file(dir: &Path) -> Result<PathBuf> {
+pub fn find_main_tex_file(dir: &Path) -> Result<PathBuf, BibExtractError> {
     // Look for common main file names
     let common_names = ["main.tex", "paper.tex", "article.tex", "manuscript.tex"];
     for name in &common_names {
@@ -155,8 +150,8 @@ pub fn find_main_tex_file(dir: &Path) -> Result<PathBuf> {
     
     // Check for files with \documentclass
     for file in &tex_files {
-        if let Ok(content) = fs::read_to_string(file) {
-            if content.contains("\\documentclass") {
+        if let Ok(content) = fs::read_to_string(file).map_err(|e| BibExtractError::IoError(e)) {
+            if content.contains(r"\documentclass") {
                 return Ok(file.clone());
             }
         }
@@ -167,14 +162,14 @@ pub fn find_main_tex_file(dir: &Path) -> Result<PathBuf> {
         return Ok(tex_files[0].clone());
     }
     
-    anyhow::bail!("No LaTeX main file found in {:?}", dir)
+    Err(BibExtractError::ApiError(format!("No LaTeX main file found in {:?}", dir)))
 }
 
 /// Extract all LaTeX content from files including handling \input commands
 pub fn extract_all_latex_from_files(
     base_dir: &Path,
     main_tex_file: &Path,
-) -> Result<(String, Vec<PathBuf>)> {
+) -> Result<(String, Vec<PathBuf>), BibExtractError> {
     let mut included_files = Vec::new();
     let mut processed_files = Vec::new();
     
@@ -194,7 +189,7 @@ fn extract_latex_content(
     tex_file: &Path,
     included_files: &mut Vec<PathBuf>,
     processed_files: &mut Vec<PathBuf>,
-) -> Result<String> {
+) -> Result<String, BibExtractError> {
     // Avoid processing the same file twice
     if processed_files.iter().any(|p| p == tex_file) {
         return Ok(String::new());
@@ -209,11 +204,11 @@ fn extract_latex_content(
     }
     
     // Read the file content
-    let content = fs::read_to_string(tex_file)?;
+    let content = fs::read_to_string(tex_file).map_err(|e| BibExtractError::IoError(e))?;
     
     // Look for \input and \include commands
     let mut result = String::new();
-    let input_re = Regex::new(r"\\(input|include)\{([^}]+)\}")?;
+    let input_re = Regex::new(r"\\(input|include)\{([^}]+)\}").map_err(|e| BibExtractError::ApiError(e.to_string()))?;
     
     let mut last_end = 0;
     for cap in input_re.captures_iter(&content) {
@@ -226,7 +221,7 @@ fn extract_latex_content(
         let filename = cap.get(2).unwrap().as_str();
         
         // Resolve the path
-        if let Ok(Some(input_path)) = resolve_input_path(base_dir, filename) {
+        if let Some(input_path) = resolve_input_path(base_dir, filename)? {
             // Recursively process the included file
             let included_content = extract_latex_content(
                 base_dir,
@@ -246,7 +241,7 @@ fn extract_latex_content(
 }
 
 /// Resolve the path of an input file
-pub fn resolve_input_path(base_dir: &Path, filename: &str) -> Result<Option<PathBuf>> {
+pub fn resolve_input_path(base_dir: &Path, filename: &str) -> Result<Option<PathBuf>, BibExtractError> {
     // Check if the file exists as is
     let direct_path = base_dir.join(filename);
     if direct_path.exists() && direct_path.is_file() {
@@ -264,4 +259,53 @@ pub fn resolve_input_path(base_dir: &Path, filename: &str) -> Result<Option<Path
     
     // Not found
     Ok(None)
+}
+
+pub fn extract_sections(content: &str) -> Vec<citation::ExtractedSection> {
+    let mut sections = Vec::new();
+    let _section_re = RegexSet::new(&[
+        r"\\section\*?\{([^}]+)\}",
+        r"\\subsection\*?\{([^}]+)\}",
+        r"\\subsubsection\*?\{([^}]+)\}",
+    ]).unwrap();
+
+    let section_title_re = Regex::new(r"\\section\*?\{([^}]+)\}\|\\subsection\*?\{([^}]+)\}\|\\subsubsection\*?\{([^}]+)\}").unwrap();
+
+    let mut last_match_end = 0;
+    for cap in section_title_re.captures_iter(content) {
+        let full_match = cap.get(0).unwrap();
+        let title = cap.get(1).or(cap.get(2)).or(cap.get(3)).unwrap().as_str().to_string();
+        
+        // Extract content between this section and the previous one
+        let section_content = content[last_match_end..full_match.start()].trim().to_string();
+        
+        // Add the previous section (if any)
+        if !section_content.is_empty() || last_match_end != 0 {
+            sections.push(citation::ExtractedSection {
+                title: "Previous Section".to_string(), // Placeholder title
+                content: section_content,
+                citations: Vec::new(), // Initialize with empty citations
+            });
+        }
+
+        last_match_end = full_match.end();
+        
+        sections.push(citation::ExtractedSection {
+            title,
+            content: String::new(), // Content will be filled in the next iteration or after the loop
+            citations: Vec::new(), // Initialize with empty citations
+        });
+    }
+
+    // Add the content after the last section
+    let last_section_content = content[last_match_end..].trim().to_string();
+    if !last_section_content.is_empty() {
+        sections.push(citation::ExtractedSection {
+            title: "Remaining Content".to_string(), // Placeholder title
+            content: last_section_content,
+            citations: Vec::new(), // Initialize with empty citations
+        });
+    }
+
+    sections
 }

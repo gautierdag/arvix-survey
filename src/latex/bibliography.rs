@@ -1,4 +1,3 @@
-use anyhow::Result;
 use log::info;
 use reqwest::blocking::Client;
 use std::collections::HashMap;
@@ -7,6 +6,8 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::latex::{clean_text, CITE_REGEX, ARXIV_ID_REGEX, ARXIV_KEY_REGEX};
+use crate::error::BibExtractError;
+
 
 /// Custom bibliography entry structure
 #[derive(Debug, Clone)]
@@ -158,121 +159,59 @@ impl Bibliography {
     }
 
     /// Parse a BBL file into Bibliography structure
-    pub fn parse_bbl(content: &str) -> Result<Self> {
+    pub fn parse_bbl(content: &str) -> Result<Self, BibExtractError> {
         let mut bibliography = Self::new();
-        
-        // Ensure we have thebibliography environment
-        if !content.contains("\\begin{thebibliography}") || !content.contains("\\end{thebibliography}") {
-            return Ok(bibliography); // Return empty bibliography if invalid format
+        if !content.contains("\\begin{thebibliography}") {
+            return Ok(bibliography);
         }
-        
-        // Extract just the content between \begin{thebibliography} and \end{thebibliography}
-        let start_idx = content.find("\\begin{thebibliography}").unwrap_or(0);
-        let end_idx = content.find("\\end{thebibliography}").unwrap_or(content.len());
-        let bib_content = &content[start_idx..end_idx];
-        
-        // Split on \bibitem to get individual entries
-        let bibitem_parts: Vec<&str> = bib_content.split("\\bibitem").skip(1).collect();
-        
-        // Regex for citation key extraction (looking for the format used in the test BBL content)
-        let re_citeauthoryear = regex::Regex::new(r"^\[\\protect\\citeauthoryear\{([^}]+)\}\{(\d{4})\}\]\{([^}]+)\}")?;
-        let re_citation_key = regex::Regex::new(r"^\{([^}]+)\}")?; // Simplified pattern for {key}
-        
-        for part in bibitem_parts {
-            let lines: Vec<&str> = part.lines().collect();
-            if lines.is_empty() {
-                continue;
-            }
-            
-            let first_line = lines[0].trim();
-            let mut citation_key = String::new();
-            let mut year = String::new();
-            
-            // Extract citation key and year using the \citeauthoryear pattern
-            if let Some(captures) = re_citeauthoryear.captures(first_line) {
-                if let Some(year_match) = captures.get(2) {
-                    year = year_match.as_str().to_string();
-                }
-                
-                if let Some(key_match) = captures.get(3) {
-                    citation_key = key_match.as_str().to_string();
-                }
-            } 
-            // Try simplified bracket pattern {key} if \citeauthoryear doesn't match
-            else if let Some(captures) = re_citation_key.captures(first_line) {
-                if let Some(key_match) = captures.get(1) {
-                    citation_key = key_match.as_str().to_string();
-                }
-            }
-            
-            // If we still don't have a key, extract anything in braces at the end of the line
-            if citation_key.is_empty() {
-                let braces_re = regex::Regex::new(r"\{([^{}]+)\}\s*$")?;
-                if let Some(captures) = braces_re.captures(first_line) {
-                    if let Some(key_match) = captures.get(1) {
-                        citation_key = key_match.as_str().to_string();
-                    }
-                }
-            }
-            
-            // Skip entry if no key found
-            if citation_key.is_empty() {
-                continue;
-            }
-            
-            // Create a builder for the entry
-            let mut entry_builder = BibEntryBuilder::new(citation_key.clone(), "article".to_string());
-            
-            // Extract author from second line if available
+
+        let bib_content = content
+            .split("\\begin{thebibliography}")
+            .nth(1)
+            .unwrap_or("")
+            .split("\\end{thebibliography}")
+            .next()
+            .unwrap_or("");
+ 
+        let bibitem_re = regex::Regex::new(r"\\bibitem(?:\[[^\]]*\])?\{([^}]+)\}").unwrap();
+
+        // Collect positions of all \bibitem occurrences
+        let mut positions = Vec::new();
+        for m in bibitem_re.find_iter(bib_content) {
+            positions.push(m.start());
+        }
+
+        // Extract each bibitem block by slicing from start of one to start of next
+        for (i, &start) in positions.iter().enumerate() {
+            let end = positions.get(i + 1).copied().unwrap_or_else(|| bib_content.len());
+            let item = &bib_content[start..end];
+
+            // Extract key from the bibitem
+            let key = bibitem_re.captures(item)
+                .and_then(|cap| cap.get(1))
+                .map(|m| m.as_str())
+                .unwrap_or("unknown");
+
+            let mut entry_builder = BibEntry::builder(key.to_string(), "article");
+
+            let lines: Vec<&str> = item.trim().lines().collect();
             if lines.len() > 1 {
-                entry_builder = entry_builder.field("author", lines[1].trim().to_string());
+                entry_builder = entry_builder.field("author", lines[1].trim()); // line 0 is bibitem line
             }
-            
-            // Set year from \citeauthoryear or look for year in content
-            if !year.is_empty() {
-                entry_builder = entry_builder.field("year", year);
-            } else {
-                // Look for year in the content
-                // First look for year at the end followed by a period
-                let year_end_re = regex::Regex::new(r"(\d{4})\.$")?;
-                let mut found_year = false;
-                for line in lines.iter().rev() {
-                    if let Some(captures) = year_end_re.captures(line) {
-                        if let Some(year_match) = captures.get(1) {
-                            entry_builder = entry_builder.field("year", year_match.as_str().to_string());
-                            found_year = true;
-                            break;
-                        }
-                    }
-                }
-                
-                // If still no year, look for the first 4-digit number that could be a year
-                if !found_year {
-                    let year_re = regex::Regex::new(r"\b(19\d{2}|20\d{2})\b")?;
-                    for line in &lines {
-                        if let Some(captures) = year_re.captures(line) {
-                            if let Some(year_match) = captures.get(1) {
-                                entry_builder = entry_builder.field("year", year_match.as_str().to_string());
-                                break;
-                            }
-                        }
-                    }
-                }
+
+            let year_re = regex::Regex::new(r"(\d{4})").unwrap();
+            if let Some(cap) = year_re.captures(item) {
+                entry_builder = entry_builder.field("year", cap.get(1).unwrap().as_str());
             }
-            
-            // Try to extract title - usually starts with \newblock
-            let title_re = regex::Regex::new(r"\\newblock\s+(.*?)(?:\.|\n)")?;
-            let full_text = lines.join("\n");
-            if let Some(captures) = title_re.captures(&full_text) {
-                if let Some(title_match) = captures.get(1) {
-                    entry_builder = entry_builder.field("title", title_match.as_str().trim().to_string());
-                }
+
+            let blocks: Vec<&str> = item.split("\\newblock").map(str::trim).filter(|s| !s.is_empty()).collect();
+            if blocks.len() > 1 {
+                // blocks[1] is usually the title (blocks[0] is author line)
+                let raw_title = blocks[1].replace('\n', " ");
+                let clean_title = raw_title.split_whitespace().collect::<Vec<_>>().join(" ");
+                entry_builder = entry_builder.field("title", &clean_title);
             }
-            
-            // Store the raw content for debugging
-            entry_builder = entry_builder.field("raw", part.trim().to_string());
-            
-            // Build the entry and add it to the bibliography
+
             bibliography.insert(entry_builder.build());
         }
         
@@ -280,13 +219,13 @@ impl Bibliography {
     }
     
     /// Parse all bibliography files from a list and consolidate them
-    pub fn parse_bibliography_files(bbl_files: &[PathBuf]) -> Result<Self> {
+    pub fn parse_bibliography_files(bbl_files: &[PathBuf]) -> Result<Self, BibExtractError> {
         let mut consolidated_biblio = Self::new();
 
         // Parse bibliography files if they exist
         for bbl_file in bbl_files {
             if bbl_file.exists() {
-                let content = fs::read_to_string(bbl_file)?;
+                let content = fs::read_to_string(bbl_file).map_err(|e| BibExtractError::IoError(e))?;
                 // Using custom BBL parser
                 match Self::parse_bbl(&content) {
                     Ok(bib) => {
@@ -398,19 +337,19 @@ impl Bibliography {
     }
     
     /// Get BibTeX entry from arXiv for a given arXiv ID
-    pub fn get_arxiv_bibtex(&self, arxiv_id: &str) -> Result<Option<String>> {
+    pub fn get_arxiv_bibtex(&self, arxiv_id: &str) -> Result<Option<String>, BibExtractError> {
         let client = Client::new();
         let url = format!("https://arxiv.org/bibtex/{}", arxiv_id);
         
         info!("Fetching BibTeX from arXiv for ID: {}", arxiv_id);
-        let response = client.get(&url).send()?;
+        let response = client.get(&url).send().map_err(|e| BibExtractError::NetworkError(e))?;
         
         if !response.status().is_success() {
             log::warn!("arXiv BibTeX service returned status {}", response.status());
             return Ok(None);
         }
         
-        let content = response.text()?;
+        let content = response.text().map_err(|e| BibExtractError::NetworkError(e))?;
         if content.contains("@") && content.contains("author") && content.contains("title") {
             return Ok(Some(content));
         }
@@ -422,7 +361,7 @@ impl Bibliography {
     pub fn normalize_citations(
         &self,
         content: &str
-    ) -> Result<(String, HashMap<String, String>)> {
+    ) -> Result<(String, HashMap<String, String>), BibExtractError> {
         let mut normalized_content = content.to_string();
         let mut key_map: HashMap<String, String> = HashMap::new();
         
