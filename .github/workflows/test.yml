@@ -20,10 +20,14 @@ jobs:
     runs-on: ${{ matrix.os }}-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: "pip"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
@@ -31,25 +35,22 @@ jobs:
         with:
           key: coverage-cargo-${{ matrix.os }}-py${{ matrix.python-version }}
         continue-on-error: true
-      - name: Setup virtual environment
-        run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install -r requirements.txt
+      - name: Install Python dependencies
+        run: uv sync --locked --all-extras --dev
+
       - name: Run coverage
         run: |
-          source venv/bin/activate
           source <(cargo llvm-cov show-env --export-prefix)
           export CARGO_TARGET_DIR=$CARGO_LLVM_COV_TARGET_DIR
           export CARGO_INCREMENTAL=1
           cargo llvm-cov clean --workspace
           cargo test
-          maturin develop
-          pytest tests --cov=bpeasy --cov-report xml
+          uv run maturin develop
+          uv run pytest tests --cov=bpeasy --cov-report xml
           cargo llvm-cov report --lcov --output-path coverage.lcov
-      - uses: codecov/codecov-action@v3
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.lcov,coverage.xml
           name: ${{ matrix.os }}-py${{ matrix.python-version }}
