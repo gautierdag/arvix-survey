@@ -27,14 +27,10 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - uses: Swatinem/rust-cache@v2.8.0
-        with:
-          key: coverage-cargo-${{ matrix.os }}-py${{ matrix.python-version }}
-        continue-on-error: true
       - name: Install Python dependencies
         run: uv sync --all-extras
 
-      - name: Run coverage
+      - name: Run Tests
         run: |
           PYTHON_PATH=$(uv run python -c "import sys; print(sys.executable)")
           PYTHON_HOME=$(dirname $(dirname $PYTHON_PATH))
@@ -46,8 +42,6 @@ jobs:
           export PYTHONPATH="$PYTHON_HOME/lib/python$PYTHON_VERSION/site-packages:$PYTHONPATH"
           export PYO3_PYTHON=$PYTHON_PATH
           export PYTHON_SYS_EXECUTABLE=$PYTHON_PATH
-          export CARGO_TARGET_DIR=$CARGO_LLVM_COV_TARGET_DIR
-          export CARGO_INCREMENTAL=1
 
           # Run tests
           cargo test
