@@ -40,7 +40,7 @@ Repository = "https://github.com/gautierdag/bibextract"
 Issues = "https://github.com/gautierdag/bibextract/issues"
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov"]
+dev = ["pytest", "pytest-cov", "maturin"]
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
