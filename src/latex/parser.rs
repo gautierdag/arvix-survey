@@ -1,6 +1,6 @@
 use anyhow::Result;
 use log::info;
-use regex::{Regex, RegexSet};
+use regex::Regex;
 use crate::error::BibExtractError;
 
 use std::fs;
@@ -261,51 +261,4 @@ pub fn resolve_input_path(base_dir: &Path, filename: &str) -> Result<Option<Path
     Ok(None)
 }
 
-pub fn extract_sections(content: &str) -> Vec<citation::ExtractedSection> {
-    let mut sections = Vec::new();
-    let _section_re = RegexSet::new(&[
-        r"\\section\*?\{([^}]+)\}",
-        r"\\subsection\*?\{([^}]+)\}",
-        r"\\subsubsection\*?\{([^}]+)\}",
-    ]).unwrap();
 
-    let section_title_re = Regex::new(r"\\section\*?\{([^}]+)\}\|\\subsection\*?\{([^}]+)\}\|\\subsubsection\*?\{([^}]+)\}").unwrap();
-
-    let mut last_match_end = 0;
-    for cap in section_title_re.captures_iter(content) {
-        let full_match = cap.get(0).unwrap();
-        let title = cap.get(1).or(cap.get(2)).or(cap.get(3)).unwrap().as_str().to_string();
-        
-        // Extract content between this section and the previous one
-        let section_content = content[last_match_end..full_match.start()].trim().to_string();
-        
-        // Add the previous section (if any)
-        if !section_content.is_empty() || last_match_end != 0 {
-            sections.push(citation::ExtractedSection {
-                title: "Previous Section".to_string(), // Placeholder title
-                content: section_content,
-                citations: Vec::new(), // Initialize with empty citations
-            });
-        }
-
-        last_match_end = full_match.end();
-        
-        sections.push(citation::ExtractedSection {
-            title,
-            content: String::new(), // Content will be filled in the next iteration or after the loop
-            citations: Vec::new(), // Initialize with empty citations
-        });
-    }
-
-    // Add the content after the last section
-    let last_section_content = content[last_match_end..].trim().to_string();
-    if !last_section_content.is_empty() {
-        sections.push(citation::ExtractedSection {
-            title: "Remaining Content".to_string(), // Placeholder title
-            content: last_section_content,
-            citations: Vec::new(), // Initialize with empty citations
-        });
-    }
-
-    sections
-}

@@ -44,22 +44,10 @@ jobs:
           PYTHON_PATH=$(uv run python -c "import sys; print(sys.executable)")
           PYTHON_HOME=$(dirname $(dirname $PYTHON_PATH))
           PYTHON_VERSION=$(uv run python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-
-          # Debug: Print Python configuration
-          echo "Python path: $PYTHON_PATH"
-          echo "Python home: $PYTHON_HOME"
-          echo "Python version: $PYTHON_VERSION"
           
           # Find the actual Python library location
           PYTHON_LIB_DIR=$(uv run python -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR'))")
           PYTHON_INCLUDE_DIR=$(uv run python -c "import sysconfig; print(sysconfig.get_path('include'))")
-
-          echo "Python lib dir: $PYTHON_LIB_DIR"
-          echo "Python include dir: $PYTHON_INCLUDE_DIR"
-
-          # Check if libpython exists
-          find $PYTHON_HOME -name "libpython*.so*" 2>/dev/null || echo "No libpython found in $PYTHON_HOME"
-          find /opt/hostedtoolcache -name "libpython*.so*" 2>/dev/null || echo "No libpython found in hostedtoolcache"
 
           # Set library paths for PyO3 - try multiple possible locations
           export LD_LIBRARY_PATH="$PYTHON_LIB_DIR:$PYTHON_HOME/lib:$LD_LIBRARY_PATH"

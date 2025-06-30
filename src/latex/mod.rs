@@ -10,7 +10,7 @@ pub mod verification;
 // Re-export commonly used types
 pub use bibliography::{Bibliography, BibEntry, BibEntryBuilder};
 pub use citation::ExtractedSection;
-pub use parser::{download_arxiv_source, find_bbl_files, extract_all_latex_from_files, resolve_input_path, extract_sections};
+pub use parser::{download_arxiv_source, find_bbl_files, extract_all_latex_from_files, resolve_input_path};
 
 // Commonly used regex patterns compiled once
 pub static CITE_REGEX: Lazy<Regex> = Lazy::new(|| {
