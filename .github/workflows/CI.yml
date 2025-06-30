@@ -71,14 +71,15 @@ jobs:
         with:
           python-version: 3.x
       
-      # Install OpenSSL development libraries for Manylinux (CentOS-based)
-      - name: Install OpenSSL for Linux (Manylinux)
-        if: ${{ startsWith(matrix.platform.runner, 'ubuntu') }} # Assuming maturin uses manylinux for ubuntu runners
+      - name: Calculate openssl-vendored
+        shell: bash
+        id: is-openssl-vendored
         run: |
-          # These commands run inside the Docker container used by maturin-action
-          # For manylinux (CentOS/RedHat based), use yum
-          sudo yum update -y
-          sudo yum install -y openssl-devel
+          if [[ "${{ startsWith(matrix.target, 'x86') }}" == "true" ]]; then
+            echo "enabled=" >> $GITHUB_OUTPUT
+          else
+            echo "enabled=--features openssl-vendored" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -113,14 +114,15 @@ jobs:
         with:
           python-version: 3.x
       
-      # Install OpenSSL development libraries for Musllinux (Alpine-based)
-      - name: Install OpenSSL for Musllinux
-        if: ${{ startsWith(matrix.platform.runner, 'ubuntu') }} # Assuming maturin uses musllinux images for ubuntu runners
+      - name: Calculate openssl-vendored
+        shell: bash
+        id: is-openssl-vendored
         run: |
-          # These commands run inside the Docker container used by maturin-action
-          # For musllinux (Alpine based), use apk
-          sudo apk update
-          sudo apk add openssl-dev
+          if [[ "${{ startsWith(matrix.target, 'x86') }}" == "true" ]]; then
+            echo "enabled=" >> $GITHUB_OUTPUT
+          else
+            echo "enabled=--features openssl-vendored" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
