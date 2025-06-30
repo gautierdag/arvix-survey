@@ -70,6 +70,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
+      
+      # Install OpenSSL development libraries for Manylinux (CentOS-based)
+      - name: Install OpenSSL for Linux (Manylinux)
+        if: ${{ startsWith(matrix.platform.runner, 'ubuntu') }} # Assuming maturin uses manylinux for ubuntu runners
+        run: |
+          # These commands run inside the Docker container used by maturin-action
+          # For manylinux (CentOS/RedHat based), use yum
+          sudo yum update -y
+          sudo yum install -y openssl-devel
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -102,6 +112,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
+      
+      # Install OpenSSL development libraries for Musllinux (Alpine-based)
+      - name: Install OpenSSL for Musllinux
+        if: ${{ startsWith(matrix.platform.runner, 'ubuntu') }} # Assuming maturin uses musllinux images for ubuntu runners
+        run: |
+          # These commands run inside the Docker container used by maturin-action
+          # For musllinux (Alpine based), use apk
+          sudo apk update
+          sudo apk add openssl-dev
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
