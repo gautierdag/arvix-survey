@@ -4,18 +4,18 @@ build-backend = "maturin"
 
 [project]
 name = "bibextract"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Extract survey content and bibliography from arXiv papers"
 authors = [
     {name = "Gautier Dagan", email = "gautier.dagan@gmail.com"},
 ]
 readme = "README.md"
-license = {file = "LICENSE"}
+license = "MIT"
 requires-python = ">=3.8"
 classifiers = [
-    "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
+    "Programming Language :: Rust",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -28,17 +28,19 @@ classifiers = [
     "Topic :: Scientific/Engineering",
     "Topic :: Text Processing :: Markup :: LaTeX",
 ]
-keywords = ["arxiv", "latex", "bibliography", "survey", "research"]
+keywords = ["arxiv", "latex", "bibliography", "survey", "research", "mcp"]
 dependencies = []
-
-dev-dependencies = [
-    "pytest>=8.3.5",
+include = [
+    "LICENSE",
 ]
 
 [project.urls]
 Homepage = "https://github.com/gautierdag/bibextract"
 Repository = "https://github.com/gautierdag/bibextract"
 Issues = "https://github.com/gautierdag/bibextract/issues"
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov"]
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
