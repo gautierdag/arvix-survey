@@ -54,102 +54,54 @@ jobs:
     needs: [test]
     runs-on: ${{ matrix.platform.runner }}
     strategy:
+      fail-fast: false
       matrix:
         platform:
           - runner: ubuntu-22.04
             target: x86_64
-          - runner: ubuntu-22.04
-            target: x86
+            before: yum install -y openssl-devel
+            dockeropts: ""
           - runner: ubuntu-22.04
             target: aarch64
-          - runner: ubuntu-22.04
-            target: armv7
-          - runner: ubuntu-22.04
-            target: s390x
-          - runner: ubuntu-22.04
-            target: ppc64le
+            before: |
+              sudo apt-get update -y && \
+              sudo apt-get install pkg-config libssl-dev -y && \
+              echo "modversion openssl:" && \
+              pkg-config --modversion openssl && \
+              echo "cflags openssl:" && \
+              pkg-config --cflags openssl && \
+              echo "libs openssl:" && \
+              pkg-config --libs openssl
+              echo ">>> Debug: libssl-dev file list:" && \
+              dpkg -L libssl-dev && \
+              echo ">>> Debug: openssl.pc path:" && \
+              pkg-config --variable=pcfiledir openssl && \
+              echo ">>> Debug: /usr/lib/*ssl*:" && \
+              ls -l /usr/lib/*ssl* || true && \
+              echo ">>> Debug: /usr/include/openssl:" && \
+              ls -l /usr/include/openssl || true
+            dockeropts: "--env OPENSSL_DIR='/usr'"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
-      
-
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
+          working-directory: rewrite
           target: ${{ matrix.platform.target }}
           args: --release --out dist --find-interpreter
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: auto
           before-script-linux: |
-                # If we're running on rhel centos, install needed packages.
-                if command -v yum &> /dev/null; then
-                    yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
-
-                    # If we're running on i686 we need to symlink libatomic
-                    # in order to build openssl with -latomic flag.
-                    if [[ ! -d "/usr/lib64" ]]; then
-                        ln -s /usr/lib/libatomic.so.1 /usr/lib/libatomic.so
-                    fi
-                else
-                    # If we're running on debian-based system.
-                    apt update -y && apt-get install -y libssl-dev openssl pkg-config
-                fi
-
+            ${{ matrix.platform.before }}
+          docker-options: |
+            ${{ matrix.platform.dockeropts }}
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
           name: wheels-linux-${{ matrix.platform.target }}
-          path: dist
-
-  musllinux:
-    needs: [test]
-    runs-on: ${{ matrix.platform.runner }}
-    strategy:
-      matrix:
-        platform:
-          - runner: ubuntu-22.04
-            target: x86_64
-          - runner: ubuntu-22.04
-            target: x86
-          - runner: ubuntu-22.04
-            target: aarch64
-          - runner: ubuntu-22.04
-            target: armv7
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: 3.x
-
-      - name: Build wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out dist --find-interpreter
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          manylinux: musllinux_1_2
-          before-script-linux: |
-            # If we're running on rhel centos, install needed packages.
-            if command -v yum &> /dev/null; then
-                yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
-
-                # If we're running on i686 we need to symlink libatomic
-                # in order to build openssl with -latomic flag.
-                if [[ ! -d "/usr/lib64" ]]; then
-                    ln -s /usr/lib/libatomic.so.1 /usr/lib/libatomic.so
-                fi
-            else
-                # If we're running on debian-based system.
-                apt update -y && apt-get install -y libssl-dev openssl pkg-config
-            fi
-
-          
-      - name: Upload wheels
-        uses: actions/upload-artifact@v4
-        with:
-          name: wheels-musllinux-${{ matrix.platform.target }}
           path: dist
 
   windows:
