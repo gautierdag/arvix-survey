@@ -40,9 +40,25 @@ jobs:
 
       - name: Run coverage
         run: |
+          # Get Python paths from uv
+          PYTHON_PATH=$(uv run python -c "import sys; print(sys.executable)")
+          PYTHON_HOME=$(dirname $(dirname $PYTHON_PATH))
+          PYTHON_VERSION=$(uv run python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          
+          # Set library paths for PyO3
+          export LD_LIBRARY_PATH="$PYTHON_HOME/lib:$LD_LIBRARY_PATH"
+          export PKG_CONFIG_PATH="$PYTHON_HOME/lib/pkgconfig:$PKG_CONFIG_PATH"
+          export PYTHONPATH="$PYTHON_HOME/lib/python$PYTHON_VERSION/site-packages:$PYTHONPATH"
+          
+          # Set PyO3 environment variables
+          export PYO3_PYTHON=$PYTHON_PATH
+          export PYTHON_SYS_EXECUTABLE=$PYTHON_PATH
+          
+          # Coverage setup
           source <(cargo llvm-cov show-env --export-prefix)
           export CARGO_TARGET_DIR=$CARGO_LLVM_COV_TARGET_DIR
           export CARGO_INCREMENTAL=1
+
           cargo llvm-cov clean --workspace
           cargo test
           uv run maturin develop
