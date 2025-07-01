@@ -88,6 +88,23 @@ impl Bibliography {
     
     /// Find the best matching entry in DBLP results for a given entry
     pub fn find_best_match_in_dblp(&self, dblp_results: &Value, entry: &BibEntry) -> Option<Value> {
+        /*
+        This function finds the best matching entry in DBLP results based on title, year, and author.
+        It compares the original entry's title, year, and author with the titles, years,
+        and authors in the DBLP results, scoring matches based on exact matches, year matches,
+        and author matches. The best match is returned if the score is above a certain threshold.
+        If no suitable match is found, it returns None.
+        
+        The scoring system is as follows:
+        - Exact title match: 3 points
+        - Title contains hit title or vice versa: 2 points
+        - Year match: 1 point
+        - Author match (5 or more matching words): 2 points
+        
+        The best match is the one with the highest score.
+        If no match has a score of at least 2, None is returned.
+        */
+
         let hits = dblp_results
             .get("result")
             .and_then(|r| r.get("hits"))
@@ -96,6 +113,8 @@ impl Bibliography {
         
         let original_title = entry.get("title")?;
         let original_year = entry.get("year")?;
+        let original_author = entry.get("author")?;
+
         let mut best_match = None;
         let mut best_score = 0;
         
@@ -128,11 +147,45 @@ impl Bibliography {
                     score += 1;
                 }
             }
+            // Author matching
+            if let Some(original_author) = Some(original_author) {
+                if let Some(hit_authors) = info.get("authors").and_then(|a| a.get("author")).and_then(|a| a.as_array()) {
+                    let hit_author_names: Vec<String> = hit_authors.iter()
+                        .filter_map(|a| a.get("text").and_then(|t| t.as_str()).map(|s| s.to_string()))
+                        .collect();
+                    
+                    if !hit_author_names.is_empty() {
+                        let hit_authors_text = hit_author_names.join(" and ");
+                        
+                        // Split on both spaces and tildes for word extraction
+                        let original_author_words: Vec<&str> = original_author
+                            .split(|c| c == ' ' || c == '~')
+                            .filter(|w| !w.is_empty())
+                            .collect();
+                        let hit_author_words: Vec<&str> = hit_authors_text
+                            .split(|c| c == ' ' || c == '~')
+                            .filter(|w| !w.is_empty())
+                            .collect();
+                        
+                        let matching_author_words = original_author_words.iter()
+                            .filter(|&word| hit_author_words.contains(word))
+                            .count();
+                        
+                        if matching_author_words >= 5 {
+                            score += 2;
+                        }
+                    }
+                }
+            }
+
             if score > best_score {
                 best_score = score;
                 best_match = Some(info.clone());
             }
         }
+
+         
+
         if best_score >= 2 {
             best_match
         } else {

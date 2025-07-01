@@ -111,10 +111,11 @@ pub mod internal {
 
                 let mut fields: Vec<_> = entry.fields.keys().filter(|&k| k != "raw").cloned().collect();
                 fields.sort(); // Sort for consistent output.
-
                 for field in fields {
                     if let Some(value) = entry.fields.get(&field) {
-                        bibtex.push_str(&format!("  {} = {{{}}}\n", field, value));
+                        // remove curly braces from the value
+                        let clean_value = value.replace("{", "").replace("}", "");
+                        bibtex.push_str(&format!("  {} = {{{}}}\n", field, clean_value));
                     }
                 }
                 bibtex.push_str("}\n\n");

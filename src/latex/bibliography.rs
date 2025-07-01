@@ -196,21 +196,50 @@ impl Bibliography {
 
             let lines: Vec<&str> = item.trim().lines().collect();
             if lines.len() > 1 {
-                entry_builder = entry_builder.field("author", lines[1].trim()); // line 0 is bibitem line
+
+                // et al handling
+                let author_line = lines[1].trim();
+                if author_line.contains("et~al.") || author_line.contains("et al.") {
+                    // If "et al." is present, we take the string until "et al."
+                    let et_al_index = author_line.find("et al.").or_else(|| author_line.find("et~al.")).unwrap_or(author_line.len());
+                    let author = &author_line[..et_al_index].trim();
+                    entry_builder = entry_builder.field("author", author.to_string());
+                } else {
+                    // Otherwise, we take the full author line
+                    entry_builder = entry_builder.field("author", author_line.to_string());
+                }
             }
 
-            let year_re = regex::Regex::new(r"(\d{4})").unwrap();
+            let year_re = regex::Regex::new(r"\b(19\d{2}|20\d{2})\b").unwrap();
             if let Some(cap) = year_re.captures(item) {
-                entry_builder = entry_builder.field("year", cap.get(1).unwrap().as_str());
+                entry_builder = entry_builder.field("year", cap.get(0).map_or("", |m| m.as_str()).to_string());
             }
 
+            // if newblock is present, split the item into blocks
             let blocks: Vec<&str> = item.split("\\newblock").map(str::trim).filter(|s| !s.is_empty()).collect();
             if blocks.len() > 1 {
                 // blocks[1] is usually the title (blocks[0] is author line)
                 let raw_title = blocks[1].replace('\n', " ");
                 let clean_title = raw_title.split_whitespace().collect::<Vec<_>>().join(" ");
-                entry_builder = entry_builder.field("title", &clean_title);
+                let clean_title = clean_title.trim_matches(|c: char| c.is_ascii_punctuation() || c.is_whitespace());
+                entry_builder = entry_builder.field("title", clean_title);
             }
+            else {
+                // if no newblock, try to extract title from quotes
+                // get title from quotations if no newblock                
+                // Use regex to find quoted title
+                let title_re = regex::Regex::new(r#"(?:``|\"|\')([^\`\"']+)(?:\'\'|\"|\')"#).unwrap();
+                if let Some(title_cap) = title_re.captures(item) {
+                    let title = title_cap.get(1).map_or("", |m| m.as_str());
+                    let clean_title = title.split_whitespace().collect::<Vec<_>>().join(" ");
+                    // strip leading/trailing whitespace and punctuation
+                    let clean_title = clean_title.trim_matches(|c: char| c.is_ascii_punctuation() || c.is_whitespace());
+                    entry_builder = entry_builder.field("title", clean_title);
+                }
+            }
+
+            // add item as raw field so that we can parse for arXiv IDs or DOI later
+            entry_builder = entry_builder.field("raw", item.trim().to_string());
 
             bibliography.insert(entry_builder.build());
         }

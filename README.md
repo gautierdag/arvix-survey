@@ -21,6 +21,12 @@ A Python package (with Rust backend) for extracting survey content and bibliogra
 uv run bibextract_mcp.py
 ```
 
+Or
+
+```bash
+uv run --python 3.12 https://raw.githubusercontent.com/gautierdag/bibextract/refs/heads/main/bibextract_mcp.py
+```
+
 ### From PyPI
 
 ```bash
