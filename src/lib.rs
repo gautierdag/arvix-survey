@@ -115,7 +115,7 @@ pub mod internal {
                     if let Some(value) = entry.fields.get(&field) {
                         // remove curly braces from the value
                         let clean_value = value.replace("{", "").replace("}", "");
-                        bibtex.push_str(&format!("  {} = {{{}}}\n", field, clean_value));
+                        bibtex.push_str(&format!("  {} = {{{}}},\n", field, clean_value));
                     }
                 }
                 bibtex.push_str("}\n\n");
