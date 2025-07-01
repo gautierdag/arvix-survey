@@ -4,26 +4,38 @@
 
 A Python package (with Rust backend) for extracting survey content and bibliography from arXiv papers.
 
-## Features
+There are a lot of ArXiv MCP tools already. This is another.
 
-- **Download arXiv papers**: Automatically downloads and extracts LaTeX source files from arXiv
-- **Extract relevant sections**: Identifies and extracts Related Work, Background, and other survey-relevant sections
-- **Bibliography management**: Parses and normalizes bibliography entries from multiple papers
-- **BibTeX generation**: Outputs proper BibTeX format for all cited works
-- **Citation verification**: Verifies citations against DBLP and arXiv databases
-- **Parallel processing**: Uses Rust's parallel processing for fast bibliography verification
+What it does differently is that it extracts content directly from the LaTeX source of the paper, rather than parsing the PDF.
+
+It also focuses entirely on survey/background/related work sections. Right now this tool will ignore all the other sections.
+
+Once it extracts the content, it also extracts looks at the BBL file and tries to reconstruct the .bibtex file and normalise the entries. Not all BBL files work (see the [tests/bbls](tests/bbls/) for examples). Once it has a title/author/year, it will try to look up the arXiv ID or DOI of the paper, and use that in the bibtex entry instead of the raw entry from the BBL file.
+
+This citation normalisation means that you can pass multiple papers to it and it will extract the related work content and bibliography from all of them, merging them into a single output, with limited overlap.
+
+The goal of this tool is to make it easy to get LLM agents to read/cite/write background sections of papers. In a loop, an agent could read a paper, extract the related work section, and then use all the ArXiv IDs in that section to extract the related work sections of those papers, and so on. This way, you can build a large corpus of related work content without having to manually search for papers.
+
+## Some future todos
+
+- [ ] push to Smithery
+- [ ] improve test coverage
+- [ ] add more `.bbl` files to tests
+- [ ] improve the MCP docs for the tool
+- [ ] add a CLI binding to run directly with uvx
 
 ## Installation
 
-### MCP server implementation
+### fastMCP server implementation
 
 ```bash
 uv run bibextract_mcp.py
 ```
 
-Or
+### fastMCP from URL
 
 ```bash
+# obviously check the file before running it, don't trust random scripts from the internet
 uv run --python 3.12 https://raw.githubusercontent.com/gautierdag/bibextract/refs/heads/main/bibextract_mcp.py
 ```
 
