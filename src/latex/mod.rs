@@ -26,7 +26,7 @@ pub static BIBTEX_ENTRY_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"@([a-zA-Z]+)\{([^,]+),").expect("Invalid BibTeX entry regex pattern")
 });
 pub static BIBTEX_FIELD_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"([a-zA-Z]+)\s*=\s*\{([^{}]*((\{[^{}]*\})[^{}]*)*)\}").expect("Invalid BibTeX field regex pattern")
+    Regex::new(r#"([a-zA-Z]+)\s*=\s*(?:\{((?:[^{}]|\{[^{}]*\})*)\}|"([^"]*)")"#).expect("Invalid BibTeX field regex pattern")
 });
 
 /// Helper function to clean text by removing punctuation and special characters

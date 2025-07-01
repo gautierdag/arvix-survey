@@ -27,8 +27,11 @@ impl Bibliography {
         
         // Extract fields
         for cap in BIBTEX_FIELD_REGEX.captures_iter(bibtex) {
-            if let (Some(field), Some(value)) = (cap.get(1), cap.get(2)) {
-                builder = builder.field(field.as_str(), value.as_str().to_string());
+            if let Some(field) = cap.get(1) {
+                // The value can be in the second or third capture group depending on whether it's in braces or quotes
+                if let Some(value) = cap.get(2).or_else(|| cap.get(3)) {
+                    builder = builder.field(field.as_str(), value.as_str().to_string());
+                }
             }
         }
         Some(builder.build())
