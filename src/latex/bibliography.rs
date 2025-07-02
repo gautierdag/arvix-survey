@@ -120,44 +120,6 @@ impl Bibliography {
         self.entries.values()
     }
     
-    /// Convert bibliography to a formatted string representation
-    pub fn to_string(&self) -> String {
-        let mut output = String::new();
-        
-        output.push_str("Bibliography {\n");
-        
-        // Sort entries by key for consistent output
-        let mut keys: Vec<_> = self.entries.keys().collect();
-        keys.sort();
-        
-        for key in keys {
-            if let Some(entry) = self.entries.get(key) {
-
-                // normalize citation key
-                let normalized_key = self.normalize_citation_key(entry);
-
-                output.push_str(&format!("  {}: {} {{\n", normalized_key, entry.entry_type));
-                
-                // Sort fields for consistent output
-                let mut fields: Vec<_> = entry.fields.keys()
-                    .filter(|&k| k != "raw") // Exclude raw field
-                    .collect();
-                fields.sort();
-                
-                for field in fields {
-                    if let Some(value) = entry.fields.get(field) {
-                        output.push_str(&format!("    {}: \"{}\",\n", field, value));
-                    }
-                }
-                
-                output.push_str("  }\n");
-            }
-        }
-        
-        output.push_str("}\n");
-        output
-    }
-
     /// Parse a BBL file into Bibliography structure
     pub fn parse_bbl(content: &str) -> Result<Self, BibExtractError> {
         let mut bibliography = Self::new();

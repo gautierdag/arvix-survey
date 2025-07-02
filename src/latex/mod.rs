@@ -43,9 +43,11 @@ pub fn clean_text(text: &str) -> String {
 // ArXiv paper structure and functionality
 pub struct ArxivPaper {
     pub id: String,                          // arXiv ID
+    pub title: String,
+    pub authors: String,
     pub sections: Vec<ExtractedSection>,     // extracted sections
     pub bibliography: Bibliography,          // parsed bibliography
-    _temp_dir: tempfile::TempDir,            // Temporary directory (keep alive while the paper is used)
+    pub _temp_dir: tempfile::TempDir,            // Temporary directory (keep alive while the paper is used)
 }
 
 impl ArxivPaper {

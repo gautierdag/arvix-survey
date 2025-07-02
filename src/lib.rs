@@ -4,6 +4,7 @@ pub mod latex;
 pub mod error;
 pub use internal::extract_survey_internal;
 
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn bibextract(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -15,9 +16,8 @@ fn bibextract(m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[pyfunction]
 #[pyo3(name = "extract_survey")]
 fn extract_survey(paper_ids: Vec<String>) -> PyResult<PyObject> {
-    // Initialize logging with a minimal level to avoid spamming Python applications.
-    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).try_init();
-
+    // // Initialize logging with a minimal level to avoid spamming Python applications.
+    // let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).try_init();
     Python::with_gil(|py| {
         // Process papers and handle any errors, converting them to Python exceptions.
         match internal::extract_survey_internal(paper_ids) {
@@ -83,6 +83,11 @@ pub mod internal {
         // Process and format all sections, normalizing citations against the consolidated bibliography.
         let mut survey_text = String::new();
         for paper in &all_papers {
+            // add paper ID, title and authors to the as a comment
+            survey_text.push_str(&format!(
+                "% Paper ID: {}\n% Title: {}\n% Authors: {}\n\n",
+                paper.id, paper.title, paper.authors
+            ));
             for section in &paper.sections {
                 survey_text.push_str(&format!("\\section{{{}}}\n\n", section.title));
                 let (normalized_content, _) =
@@ -99,7 +104,7 @@ pub mod internal {
     }
 
     /// Convert a Bibliography object to a proper BibTeX-formatted string.
-    fn format_bibliography_as_bibtex(bibliography: &latex::Bibliography) -> String {
+    pub fn format_bibliography_as_bibtex(bibliography: &latex::Bibliography) -> String {
         let mut bibtex = String::new();
         let mut keys: Vec<_> = bibliography.iter().map(|entry| entry.key.clone()).collect();
         keys.sort(); // Sort for consistent output.

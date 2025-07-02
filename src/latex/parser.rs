@@ -60,8 +60,42 @@ pub fn download_arxiv_source(paper_id: &str) -> Result<ArxivPaper, BibExtractErr
     // Extract sections from the full content
     let sections = citation::extract_sections_from_latex(&full_content, &bibliography)?;
 
+    // get title and authors from arvix/bibtex/id
+    let bibtex_url = format!("https://arxiv.org/bibtex/{}", paper_id);
+    let bibtex_response = client.get(&bibtex_url).send().map_err(|e| BibExtractError::NetworkError(e))?;
+    if !bibtex_response.status().is_success() {
+        return Err(BibExtractError::ApiError(format!("Failed to download BibTeX: HTTP {}", bibtex_response.status())));
+    }
+    let bibtex_content = bibtex_response.text().map_err(|e| BibExtractError::NetworkError(e))?;
+    
+    // Extract title and authors from the BibTeX content
+    let title_re = Regex::new(r"title\s*=\s*\{([\s\S]*?)\}").unwrap();
+    let authors_re = Regex::new(r"author\s*=\s*\{([\s\S]*?)\}").unwrap();
+    let title = title_re.captures(&bibtex_content)
+        .and_then(|cap| cap.get(1))
+        .map_or("Unknown Title".to_string(), |m| m.as_str().trim().to_string());
+
+    let authors = authors_re.captures(&bibtex_content)
+        .and_then(|cap| cap.get(1))
+        .map_or("Unknown Authors".to_string(), |m| m.as_str().trim().to_string());
+
+    // shorten the title and authors if they are too long
+    let max_length = 100;
+    let title = if title.len() > max_length {
+        format!("{}...", &title[..max_length - 3])
+    } else {
+        title
+    };
+    let authors: String = if authors.len() > max_length {
+        format!("{}...", &authors[..max_length - 3])
+    } else {
+        authors
+    };
+
     Ok(ArxivPaper {
         id: paper_id.to_string(),
+        title: title,
+        authors: authors,
         sections,
         bibliography,
         _temp_dir: temp_dir,
