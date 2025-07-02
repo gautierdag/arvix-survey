@@ -1,5 +1,6 @@
 # bibextract
 
+[![smithery badge](https://smithery.ai/badge/@gautierdag/bibextract)](https://smithery.ai/server/@gautierdag/bibextract)
 [![codecov](https://codecov.io/gh/gautierdag/bibextract/branch/main/graph/badge.svg?token=NWHDJ22L8I)](https://codecov.io/gh/gautierdag/bibextract) [![tests](https://github.com/gautierdag/bibextract/actions/workflows/test.yml/badge.svg)](https://github.com/gautierdag/bibextract/actions/workflows/bibextract.yml) [![image](https://img.shields.io/pypi/l/bibextract.svg)](https://pypi.python.org/pypi/bibextract) [![image](https://img.shields.io/pypi/pyversions/bibextract.svg)](https://pypi.python.org/pypi/bibextract) [![PyPI version](https://badge.fury.io/py/bibextract.svg)](https://badge.fury.io/py/bibextract)
 
 A Python package (with Rust backend) for extracting survey content and bibliography from arXiv papers.
@@ -18,11 +19,9 @@ The goal of this tool is to make it easy to get LLM agents to read/cite/write ba
 
 ## Some future todos
 
-- [ ] push to Smithery
 - [ ] improve test coverage
 - [ ] add more `.bbl` files to tests
 - [ ] improve the MCP docs for the tool
-- [ ] add a CLI binding to run directly with uvx
 
 ## Installation
 
