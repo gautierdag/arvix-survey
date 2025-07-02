@@ -26,6 +26,14 @@ The goal of this tool is to make it easy to get LLM agents to read/cite/write ba
 
 ## Installation
 
+### Installing via Smithery
+
+To install bibextract for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@gautierdag/bibextract):
+
+```bash
+npx -y @smithery/cli install @gautierdag/bibextract --client claude
+```
+
 ### fastMCP server implementation
 
 ```bash
