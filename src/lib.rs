@@ -20,7 +20,7 @@ fn extract_survey(paper_ids: Vec<String>) -> PyResult<PyObject> {
     // let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).try_init();
     Python::with_gil(|py| {
         // Create a single tokio runtime for all async operations
-        let rt = tokio::runtime::Runtime::new().map_err(|e| {
+        let rt = tokio::runtime::Builder::new_current_thread().build().map_err(|e| {
             pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to create async runtime: {}", e))
         })?;
         
