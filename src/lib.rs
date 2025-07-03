@@ -16,11 +16,11 @@ fn bibextract(m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[pyfunction]
 #[pyo3(name = "extract_survey")]
 fn extract_survey(paper_ids: Vec<String>) -> PyResult<PyObject> {
-    // // Initialize logging with a minimal level to avoid spamming Python applications.
-    // let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).try_init();
+    // Initialize logging with a minimal level to avoid spamming Python applications.
+    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).try_init();
     Python::with_gil(|py| {
         // Create a single tokio runtime for all async operations
-        let rt = tokio::runtime::Builder::new_current_thread().build().map_err(|e| {
+        let rt = tokio::runtime::Builder::new_current_thread().enable_io().enable_time().build().map_err(|e| {
             pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to create async runtime: {}", e))
         })?;
         

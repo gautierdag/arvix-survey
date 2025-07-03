@@ -26,7 +26,10 @@ pub async fn download_arxiv_source_async(paper_id: &str) -> Result<ArxivPaper, B
     let url = format!("{}/e-print/{}", base_url, paper_id);
 
     info!("Downloading source files from arXiv for paper: {}", paper_id);
-    let response = HTTP_CLIENT.get(&url).send().await.map_err(|e| BibExtractError::NetworkError(e))?;
+    let response = HTTP_CLIENT.get(&url).send().await.map_err(|e| {
+        log::error!("Network request to {} failed: {:?}", url, e);
+        BibExtractError::NetworkError(e)
+    })?;
 
     if !response.status().is_success() {
         return Err(BibExtractError::ApiError(format!("Failed to download source: HTTP {}", response.status())));

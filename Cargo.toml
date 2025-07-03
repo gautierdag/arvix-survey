@@ -18,7 +18,7 @@ split-debuginfo = "unpacked"
 
 [dependencies]
 pyo3 = "0.25.0"
-reqwest = { version = "0.12.15", features = ["blocking", "json", "system-proxy"], default-features = false }
+reqwest = { version = "0.12.15", features = ["blocking", "json", "system-proxy", "native-tls"], default-features = false }
 tokio = { version = "1.46", features = ["full"] }
 clap = { version = "4.3", features = ["derive"] }
 anyhow = { version = "1.0", default-features = false }
