@@ -100,3 +100,48 @@ fn test_parse_example_bbl_3() {
             "Title should contain reference to graph of thoughts");
     }
 }
+
+#[test]
+fn test_parse_example_bbl_4() {
+    let bbl_content = load_bbl_fixture("4.bbl");
+    let bibliography = Bibliography::parse_bbl(&bbl_content).expect("Failed to parse 4.bbl");
+
+    // Test that key entries are parsed
+    assert!(bibliography.get("amir2020remix").is_some(), "Entry 'amir2020remix' should be parsed");
+    assert!(bibliography.get("attaran2019blockchain").is_some(), "Entry 'attaran2019blockchain' should be parsed");
+    assert!(bibliography.get("bucea2021blockchain").is_some(), "Entry 'bucea2021blockchain' should be parsed");
+    assert!(bibliography.get("8363455").is_some(), "Entry '8363455' should be parsed");
+    assert!(bibliography.get("chen2018exploring").is_some(), "Entry 'chen2018exploring' should be parsed");
+    assert!(bibliography.get("cocco2017banking").is_some(), "Entry 'cocco2017banking' should be parsed");
+
+    // Test specific parsing for amir2020remix entry
+    let amir_entry = bibliography.get("amir2020remix").unwrap();
+    if let Some(year) = amir_entry.get("year") {
+        assert_eq!(year, "2020");
+    }
+    if let Some(author) = amir_entry.get("author") {
+        assert!(author.contains("Rana~M Amir~Latif"), "Author should contain 'Rana~M Amir~Latif'");
+        assert!(author.contains("Khalid"), "Author should contain 'Khalid'");
+    }
+    if let Some(title) = amir_entry.get("title") {
+        assert!(title.contains("remix IDE") || title.contains("smart contract") || title.contains("healthcare"), 
+            "Title should contain reference to remix IDE, smart contract, or healthcare");
+    }
+
+    // Test specific parsing for attaran2019blockchain entry
+    let attaran_entry = bibliography.get("attaran2019blockchain").unwrap();
+    if let Some(year) = attaran_entry.get("year") {
+        assert_eq!(year, "2019");
+    }
+    if let Some(author) = attaran_entry.get("author") {
+        assert!(author.contains("Mohsen Attaran"), "Author should contain 'Mohsen Attaran'");
+        assert!(author.contains("Angappa Gunasekaran"), "Author should contain 'Angappa Gunasekaran'");
+    }
+    if let Some(title) = attaran_entry.get("title") {
+        assert!(title.contains("Blockchain for Gaming") || title.contains("Gaming"), 
+            "Title should contain reference to Blockchain for Gaming");
+    }
+
+    // Test that we can parse multiple entries correctly
+    assert!(bibliography.entries.len() >= 6, "Should parse at least 6 entries");
+}

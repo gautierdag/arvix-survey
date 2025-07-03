@@ -6,36 +6,42 @@ use serde_json::Value;
 use once_cell::sync::Lazy;
 use backoff::{future::retry, ExponentialBackoff};
 use std::time::Duration;
+use bibparser::{Parser as BibParser};
 
-use crate::latex::{Bibliography, BibEntry, BibEntryBuilder, BIBTEX_ENTRY_REGEX, BIBTEX_FIELD_REGEX};
+use crate::latex::{Bibliography, BibEntry, BibEntryBuilder};
 
 // Use a single, lazily-initialized reqwest::Client for all API calls to enable connection pooling.
 static HTTP_CLIENT: Lazy<Client> = Lazy::new(Client::new);
 
 impl Bibliography {
-    /// Parse a BibTeX entry string into a BibEntry
+    /// Parse a BibTeX entry string into a BibEntry using the bibparser crate.
     pub fn parse_bibtex_entry(&self, bibtex: &str) -> Option<BibEntry> {
-        // Simple BibTeX parser for our needs
-        // Extract entry type and key
-        let (entry_type, entry_key) = BIBTEX_ENTRY_REGEX.captures(bibtex).and_then(|caps| {
-            let etype = caps.get(1).map(|m| m.as_str().to_string())?;
-            let ekey = caps.get(2).map(|m| m.as_str().to_string())?;
-            Some((etype, ekey))
-        })?;
-        
-        let mut builder = BibEntryBuilder::new(entry_key, entry_type);
-        
-        // Extract fields
-        for cap in BIBTEX_FIELD_REGEX.captures_iter(bibtex) {
-            if let Some(field) = cap.get(1) {
-                // The value can be in the second or third capture group depending on whether it's in braces or quotes
-                if let Some(value) = cap.get(2).or_else(|| cap.get(3)) {
-                    builder = builder.field(field.as_str(), value.as_str().to_string());
-                }
-            }
+        // Quick validation - must contain basic BibTeX structure
+        if !bibtex.trim_start().starts_with('@') || !bibtex.contains('{') {
+            return None;
         }
-        Some(builder.build())
+        let parser_result = BibParser::from_string(bibtex.to_string());
+        // Handle the Result<Parser, _>
+        let mut parser = match parser_result {
+            Ok(p) => p,
+            Err(_) => return None,
+        };
+        // Parse with early return - only process first valid entry
+        match parser.iter().next() {
+            Some(Ok(entry)) => {
+                let entry_key = entry.id;
+                let entry_type = entry.kind;
+                let mut builder = BibEntryBuilder::new(entry_key, entry_type);
+                for (name, data) in entry.fields.iter() {
+                    builder = builder.field(name, data.to_string());
+                }
+                Some(builder.build())
+            }
+            _ => None,
+        }
     }
+    
+    
 
     /// Query DBLP API for paper information based on paper title and author
     pub async fn query_dblp_api_async(&self, entry: &BibEntry) -> Result<Option<Value>, BibExtractError> {
@@ -44,7 +50,7 @@ impl Bibliography {
             None => return Ok(None), // No title, can't search
         };
         
-        let clean_title = title.replace("{", "").replace("}", "");
+        let clean_title = title.replace("{", "").replace("}", "").replace("*", "");
         let encoded_title = clean_title.replace(" ", "+");
         
         // Support configurable base URL for testing
@@ -95,7 +101,11 @@ impl Bibliography {
                 }
                 Ok(None)
             } else {
-                log::warn!("DBLP API returned status {}", response.status());
+                if response.status().as_u16() == 500 {
+                    log::warn!("DBLP API returned 500 Internal Server Error for query: {}", url);
+                } else {
+                    log::warn!("DBLP API returned status {}", response.status());
+                }
                 Err(backoff::Error::transient(BibExtractError::ApiError(format!("DBLP API returned status {}", response.status()))))
             }
         };

@@ -133,18 +133,25 @@ impl Bibliography {
             .next()
             .unwrap_or("");
  
+        // Normalize the content to handle multi-line bibitem entries
+        // Replace patterns like "\bibitem[...]%\n        {key}" with "\bibitem[...]{key}"
+        let normalized_content = regex::Regex::new(r"\\bibitem(\[[^\]]*\])?%\s*\n\s*")
+            .unwrap()
+            .replace_all(bib_content, r"\bibitem$1");
+        
+        // Handle both single-line and multi-line bibitem formats
         let bibitem_re = regex::Regex::new(r"\\bibitem(?:\[[^\]]*\])?\{([^}]+)\}").unwrap();
 
         // Collect positions of all \bibitem occurrences
         let mut positions = Vec::new();
-        for m in bibitem_re.find_iter(bib_content) {
+        for m in bibitem_re.find_iter(&normalized_content) {
             positions.push(m.start());
         }
 
         // Extract each bibitem block by slicing from start of one to start of next
         for (i, &start) in positions.iter().enumerate() {
-            let end = positions.get(i + 1).copied().unwrap_or_else(|| bib_content.len());
-            let item = &bib_content[start..end];
+            let end = positions.get(i + 1).copied().unwrap_or_else(|| normalized_content.len());
+            let item = &normalized_content[start..end];
 
             // Extract key from the bibitem
             let key = bibitem_re.captures(item)
@@ -154,19 +161,61 @@ impl Bibliography {
 
             let mut entry_builder = BibEntry::builder(key.to_string(), "article");
 
-            let lines: Vec<&str> = item.trim().lines().collect();
-            if lines.len() > 1 {
-
-                // et al handling
-                let author_line = lines[1].trim();
-                if author_line.contains("et~al.") || author_line.contains("et al.") {
-                    // If "et al." is present, we take the string until "et al."
-                    let et_al_index = author_line.find("et al.").or_else(|| author_line.find("et~al.")).unwrap_or(author_line.len());
-                    let author = &author_line[..et_al_index].trim();
-                    entry_builder = entry_builder.field("author", author.to_string());
-                } else {
-                    // Otherwise, we take the full author line
-                    entry_builder = entry_builder.field("author", author_line.to_string());
+            // For entries with \bibfield{author} structure, extract author differently
+            if item.contains("\\bibfield{author}") {
+                // Extract author from \bibfield{author}{...} pattern with proper brace matching
+                if let Some(start_pos) = item.find("\\bibfield{author}{") {
+                    let content_start = start_pos + "\\bibfield{author}{".len();
+                    let mut brace_count = 1;
+                    let mut end_pos = content_start;
+                    
+                    let chars: Vec<char> = item[content_start..].chars().collect();
+                    for (i, &ch) in chars.iter().enumerate() {
+                        if ch == '{' {
+                            brace_count += 1;
+                        } else if ch == '}' {
+                            brace_count -= 1;
+                            if brace_count == 0 {
+                                end_pos = content_start + i;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if brace_count == 0 {
+                        let author_content = &item[content_start..end_pos];
+                        
+                        // Extract individual person names from \bibinfo{person}{...} patterns
+                        let person_re = regex::Regex::new(r"\\bibinfo\{person\}\{([^}]+)\}").unwrap();
+                        let mut authors = Vec::new();
+                        for person_cap in person_re.captures_iter(author_content) {
+                            if let Some(person) = person_cap.get(1) {
+                                authors.push(person.as_str());
+                            }
+                        }
+                        
+                        if !authors.is_empty() {
+                            // Join authors with commas and handle "and" connector
+                            let author_string = authors.join(", ");
+                            entry_builder = entry_builder.field("author", author_string);
+                        }
+                    }
+                }
+            } else {
+                // Fallback to original author extraction logic
+                let lines: Vec<&str> = item.trim().lines().collect();
+                if lines.len() > 1 {
+                    // et al handling
+                    let author_line = lines[1].trim();
+                    if author_line.contains("et~al.") || author_line.contains("et al.") {
+                        // If "et al." is present, we take the string until "et al."
+                        let et_al_index = author_line.find("et al.").or_else(|| author_line.find("et~al.")).unwrap_or(author_line.len());
+                        let author = &author_line[..et_al_index].trim();
+                        entry_builder = entry_builder.field("author", author.to_string());
+                    } else {
+                        // Otherwise, we take the full author line
+                        entry_builder = entry_builder.field("author", author_line.to_string());
+                    }
                 }
             }
 
@@ -175,14 +224,24 @@ impl Bibliography {
                 entry_builder = entry_builder.field("year", cap.get(0).map_or("", |m| m.as_str()).to_string());
             }
 
-            // if newblock is present, split the item into blocks
-            let blocks: Vec<&str> = item.split("\\newblock").map(str::trim).filter(|s| !s.is_empty()).collect();
-            if blocks.len() > 1 {
-                // blocks[1] is usually the title (blocks[0] is author line)
-                let raw_title = blocks[1].replace('\n', " ");
-                let clean_title = raw_title.split_whitespace().collect::<Vec<_>>().join(" ");
+            // Extract title from \showarticletitle{...} pattern first
+            let show_title_re = regex::Regex::new(r"\\showarticletitle\{([^}]+)\}").unwrap();
+            if let Some(title_cap) = show_title_re.captures(item) {
+                let title = title_cap.get(1).map_or("", |m| m.as_str());
+                let clean_title = title.split_whitespace().collect::<Vec<_>>().join(" ");
                 let clean_title = clean_title.trim_matches(|c: char| c.is_ascii_punctuation() || c.is_whitespace());
                 entry_builder = entry_builder.field("title", clean_title);
+            }
+            // if newblock is present, split the item into blocks
+            else if item.contains("\\newblock") {
+                let blocks: Vec<&str> = item.split("\\newblock").map(str::trim).filter(|s| !s.is_empty()).collect();
+                if blocks.len() > 1 {
+                    // blocks[1] is usually the title (blocks[0] is author line)
+                    let raw_title = blocks[1].replace('\n', " ");
+                    let clean_title = raw_title.split_whitespace().collect::<Vec<_>>().join(" ");
+                    let clean_title = clean_title.trim_matches(|c: char| c.is_ascii_punctuation() || c.is_whitespace());
+                    entry_builder = entry_builder.field("title", clean_title);
+                }
             }
             else {
                 // if no newblock, try to extract title from quotes
@@ -210,6 +269,8 @@ impl Bibliography {
     /// Parse all bibliography files from a list and consolidate them
     pub fn parse_bibliography_files(bbl_files: &[PathBuf]) -> Result<Self, BibExtractError> {
         let mut consolidated_biblio = Self::new();
+
+        log::info!("Parsing {} BBL files", bbl_files.len());
 
         // Parse bibliography files if they exist
         for bbl_file in bbl_files {

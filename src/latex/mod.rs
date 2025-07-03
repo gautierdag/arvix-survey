@@ -22,12 +22,6 @@ pub static ARXIV_ID_REGEX: Lazy<Regex> = Lazy::new(|| {
 pub static ARXIV_KEY_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^([0-9]{4}\.[0-9]+)$").expect("Invalid arXiv key regex pattern")
 });
-pub static BIBTEX_ENTRY_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"@([a-zA-Z]+)\{([^,]+),").expect("Invalid BibTeX entry regex pattern")
-});
-pub static BIBTEX_FIELD_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"([a-zA-Z]+)\s*=\s*(?:\{((?:[^{}]|\{[^{}]*\})*)\}|"([^"]*)")"#).expect("Invalid BibTeX field regex pattern")
-});
 
 /// Helper function to clean text by removing punctuation and special characters
 pub fn clean_text(text: &str) -> String {

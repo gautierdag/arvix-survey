@@ -201,7 +201,7 @@ fn test_find_best_match_multiple_hits_best_score() {
 fn test_parse_bibtex_nested_braces() {
     let bib = Bibliography::new();
     let bibtex_str = r#"@inproceedings{nested2024,
-            title = {Paper about {Machine Learning} and {Deep Neural Networks}},
+            title = {Paper about {Machine Learning} and {Deep {Neural} Networks}},
             author = {Author Name},
             booktitle = {Conference on {AI} and {ML}},
             year = {2024}
