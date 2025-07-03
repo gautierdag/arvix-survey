@@ -84,4 +84,51 @@ Content without citations.";
     let sections = extract_sections_from_latex(content, &bibliography).unwrap();
     assert_eq!(sections.len(), 1);
     assert!(sections[0].citations.is_empty());
+
+    // Test with a subsection that is a related work section
+    let content = r"\subsection{Literature Review}
+This is a subsection with a literature review.";
+    let sections = extract_sections_from_latex(content, &bibliography).unwrap();
+    assert_eq!(sections.len(), 1);
+    assert_eq!(sections[0].title, "Literature Review");
+
+    // Test fallback cases for title and content extraction
+    let content = r"\section{Related Work}This is the content.";
+    let sections = extract_sections_from_latex(content, &bibliography).unwrap();
+    assert_eq!(sections.len(), 1);
+    assert_eq!(sections[0].title, "Related Work");
+    assert_eq!(sections[0].content, "This is the content.");
+
+    // Test title extraction fallback
+    let content = r"\section{Related Work
+}
+Content";
+    let sections = extract_sections_from_latex(content, &bibliography).unwrap();
+    assert_eq!(sections[0].title, "Related Work");
+
+    // Test content extraction fallback
+    let content = r"\section{Related Work}";
+    let sections = extract_sections_from_latex(content, &bibliography).unwrap();
+    assert_eq!(sections[0].content, "");
+
+    // Test no title
+    let content = r"\section{}
+Content";
+    let sections = extract_sections_from_latex(content, &bibliography).unwrap();
+    assert!(sections.is_empty());
+
+    // Test no content
+    let content = r"\section{Related Work}";
+    let sections = extract_sections_from_latex(content, &bibliography).unwrap();
+    assert_eq!(sections[0].content, "");
+
+    // Test title with no content
+    let content = r"\section{Related Work}";
+    let sections = extract_sections_from_latex(content, &bibliography).unwrap();
+    assert_eq!(sections[0].title, "Related Work");
+
+    // Test empty title
+    let content = r"\section{}";
+    let sections = extract_sections_from_latex(content, &bibliography).unwrap();
+    assert!(sections.is_empty());
 }

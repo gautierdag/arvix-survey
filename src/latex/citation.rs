@@ -145,6 +145,8 @@ fn extract_content_from_section(section_text: &str) -> Result<String, BibExtract
         let content_start = title_match.end();
         if content_start < section_text.len() {
             return Ok(section_text[content_start..].trim().to_string());
+        } else {
+            return Ok(String::new());
         }
     }
     

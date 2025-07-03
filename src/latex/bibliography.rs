@@ -1,5 +1,3 @@
-use log::info;
-use reqwest::blocking::Client;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
@@ -325,27 +323,6 @@ impl Bibliography {
         }
         
         None
-    }
-    
-    /// Get BibTeX entry from arXiv for a given arXiv ID
-    pub fn get_arxiv_bibtex(&self, arxiv_id: &str) -> Result<Option<String>, BibExtractError> {
-        let client = Client::new();
-        let url = format!("https://arxiv.org/bibtex/{}", arxiv_id);
-        
-        info!("Fetching BibTeX from arXiv for ID: {}", arxiv_id);
-        let response = client.get(&url).send().map_err(|e| BibExtractError::NetworkError(e))?;
-        
-        if !response.status().is_success() {
-            log::warn!("arXiv BibTeX service returned status {}", response.status());
-            return Ok(None);
-        }
-        
-        let content = response.text().map_err(|e| BibExtractError::NetworkError(e))?;
-        if content.contains("@") && content.contains("author") && content.contains("title") {
-            return Ok(Some(content));
-        }
-        
-        Ok(None)
     }
     
     /// Normalize citation keys in LaTeX content

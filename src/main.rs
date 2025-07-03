@@ -25,7 +25,8 @@ struct Args {
     verbose: bool,
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = Args::parse();
 
     // Configure logging based on the verbosity flag.
@@ -33,7 +34,7 @@ fn main() -> Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(log_level)).init();
 
     // Use the shared internal function to process papers.
-    match extract_survey_internal(args.paper_ids) {
+    match extract_survey_internal(args.paper_ids).await {
         Ok((survey_text, bibtex)) => {
             // Handle file output.
             if let Some(output_path) = args.output {

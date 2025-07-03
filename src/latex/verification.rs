@@ -1,11 +1,11 @@
 use crate::error::BibExtractError;
 use anyhow::Result;
 use log::info;
-use reqwest::blocking::Client;
+use reqwest::Client;
 use serde_json::Value;
 use once_cell::sync::Lazy;
-use backoff::retry;
-use backoff::ExponentialBackoff;
+use backoff::{future::retry, ExponentialBackoff};
+use std::time::Duration;
 
 use crate::latex::{Bibliography, BibEntry, BibEntryBuilder, BIBTEX_ENTRY_REGEX, BIBTEX_FIELD_REGEX};
 
@@ -38,7 +38,7 @@ impl Bibliography {
     }
 
     /// Query DBLP API for paper information based on paper title and author
-    pub fn query_dblp_api(&self, entry: &BibEntry) -> Result<Option<Value>, BibExtractError> {
+    pub async fn query_dblp_api_async(&self, entry: &BibEntry) -> Result<Option<Value>, BibExtractError> {
         let title = match entry.get("title") {
             Some(t) => t,
             None => return Ok(None), // No title, can't search
@@ -46,23 +46,33 @@ impl Bibliography {
         
         let clean_title = title.replace("{", "").replace("}", "");
         let encoded_title = clean_title.replace(" ", "+");
-        let url = format!("https://dblp.org/search/publ/api?q={}&format=json", encoded_title);
         
-        let operation = || {
+        // Support configurable base URL for testing
+        let base_url = std::env::var("DBLP_BASE_URL").unwrap_or_else(|_| "https://dblp.org".to_string());
+        let url = format!("{}/search/publ/api?q={}&format=json", base_url, encoded_title);
+        
+        // Create exponential backoff strategy with configurable timeout for testing
+        let max_timeout = std::env::var("API_TIMEOUT_SECS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(30);
+        
+        let backoff = ExponentialBackoff {
+            initial_interval: Duration::from_millis(100),
+            max_interval: Duration::from_secs(5),
+            max_elapsed_time: Some(Duration::from_secs(max_timeout)),
+            ..Default::default()
+        };
+        
+        let operation = || async {
             info!("Querying DBLP API for paper: {}", clean_title);
-            let response = HTTP_CLIENT.get(&url).send()
+            let response = HTTP_CLIENT.get(&url).send().await
                 .map_err(|e| backoff::Error::transient(BibExtractError::NetworkError(e)))?;
 
             if response.status().is_success() {
-                response.json::<Value>().map_err(|e| backoff::Error::transient(BibExtractError::NetworkError(e)))
-            } else {
-                log::warn!("DBLP API returned status {}", response.status());
-                Err(backoff::Error::transient(BibExtractError::ApiError(format!("DBLP API returned status {}", response.status()))))
-            }
-        };
-
-        match retry(ExponentialBackoff::default(), operation) {
-            Ok(json_response) => {
+                let json_response: Value = response.json().await
+                    .map_err(|e| backoff::Error::transient(BibExtractError::NetworkError(e)))?;
+                
                 if let Some(hit_count) = json_response
                     .get("result")
                     .and_then(|r| r.get("hits"))
@@ -84,10 +94,21 @@ impl Bibliography {
                     }
                 }
                 Ok(None)
-            },
-            Err(_) => Ok(None)
+            } else {
+                log::warn!("DBLP API returned status {}", response.status());
+                Err(backoff::Error::transient(BibExtractError::ApiError(format!("DBLP API returned status {}", response.status()))))
+            }
+        };
+
+        match retry(backoff, operation).await {
+            Ok(result) => Ok(result),
+            Err(_) => {
+                log::warn!("DBLP API query failed after retries for: {}", clean_title);
+                Ok(None)
+            }
         }
     }
+
     
     /// Find the best matching entry in DBLP results for a given entry
     pub fn find_best_match_in_dblp(&self, dblp_results: &Value, entry: &BibEntry) -> Option<Value> {
@@ -196,10 +217,59 @@ impl Bibliography {
         }
     }
 
+    /// Get BibTeX entry from arXiv for a given arXiv ID (async version)
+    pub async fn get_arxiv_bibtex_async(&self, arxiv_id: &str) -> Result<Option<String>, BibExtractError> {
+        // Support configurable base URL for testing
+        let base_url = std::env::var("ARXIV_BASE_URL").unwrap_or_else(|_| "https://arxiv.org".to_string());
+        let url = format!("{}/bibtex/{}", base_url, arxiv_id);
+        
+        // Create exponential backoff strategy with configurable timeout for testing
+        let max_timeout = std::env::var("API_TIMEOUT_SECS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(30);
+        
+        let backoff = ExponentialBackoff {
+            initial_interval: Duration::from_millis(100),
+            max_interval: Duration::from_secs(5),
+            max_elapsed_time: Some(Duration::from_secs(max_timeout)),
+            ..Default::default()
+        };
+        
+        let operation = || async {
+            info!("Querying arXiv for BibTeX entry, ID: {}", arxiv_id);
+            let response = HTTP_CLIENT.get(&url).send().await
+                .map_err(|e| backoff::Error::transient(BibExtractError::NetworkError(e)))?;
+
+            if response.status().is_success() {
+                let bibtex = response.text().await
+                    .map_err(|e| backoff::Error::transient(BibExtractError::NetworkError(e)))?;
+                
+                if bibtex.contains("@") && bibtex.contains("author") && bibtex.contains("title") {
+                    Ok(Some(bibtex))
+                } else {
+                    log::warn!("arXiv BibTeX entry does not contain required fields");
+                    Ok(None)
+                }
+            } else {
+                log::warn!("arXiv API returned status {}", response.status());
+                Err(backoff::Error::transient(BibExtractError::ApiError(format!("arXiv API returned status {}", response.status()))))
+            }
+        };
+
+        match retry(backoff, operation).await {
+            Ok(result) => Ok(result),
+            Err(_) => {
+                log::warn!("arXiv API query failed after retries for ID: {}", arxiv_id);
+                Ok(None)
+            }
+        }
+    }
+
     /// Verifies a BibEntry using the arXiv API.
-    fn verify_from_arxiv(&self, entry: &BibEntry) -> Result<Option<BibEntry>, BibExtractError> {
+    async fn verify_from_arxiv(&self, entry: &BibEntry) -> Result<Option<BibEntry>, BibExtractError> {
         if let Some(arxiv_id) = self.extract_arxiv_id(entry) {
-            let bibtex = self.get_arxiv_bibtex(&arxiv_id)?;
+            let bibtex = self.get_arxiv_bibtex_async(&arxiv_id).await?;
             if let Some(bibtex) = bibtex {
                 if let Some(mut verified_entry) = self.parse_bibtex_entry(&bibtex) {
                     verified_entry.set("verified_source", "arXiv".to_string());
@@ -211,8 +281,8 @@ impl Bibliography {
     }
 
     /// Verifies a BibEntry using the DBLP API.
-    fn verify_from_dblp(&self, entry: &BibEntry) -> Result<Option<BibEntry>, BibExtractError> {
-        if let Some(dblp_results) = self.query_dblp_api(entry)? {
+    async fn verify_from_dblp(&self, entry: &BibEntry) -> Result<Option<BibEntry>, BibExtractError> {
+        if let Some(dblp_results) = self.query_dblp_api_async(entry).await? {
             if let Some(best_match) = self.find_best_match_in_dblp(&dblp_results, entry) {
                 let mut builder = BibEntryBuilder::new(entry.key.clone(), entry.entry_type.clone());
 
@@ -292,9 +362,9 @@ impl Bibliography {
     }
 
     /// Verify a single entry using both DBLP and arXiv APIs
-    pub fn verify_entry(&self, entry: &mut BibEntry) -> Result<bool, BibExtractError> {
-        let arxiv_result = self.verify_from_arxiv(entry)?;
-        let dblp_result = self.verify_from_dblp(entry)?;
+    pub async fn verify_entry(&self, entry: &mut BibEntry) -> Result<bool, BibExtractError> {
+        let arxiv_result = self.verify_from_arxiv(entry).await?;
+        let dblp_result = self.verify_from_dblp(entry).await?;
         Ok(self.update_entry_with_verified_data(entry, arxiv_result, dblp_result))
     }
 }

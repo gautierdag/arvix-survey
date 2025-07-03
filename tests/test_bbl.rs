@@ -5,7 +5,7 @@ use std::path::Path;
 fn load_bbl_fixture(file_name: &str) -> String {
     let mut path = Path::new(env!("CARGO_MANIFEST_DIR")).to_path_buf();
     path.push("tests");
-    path.push("bbls");
+    path.push("fixtures");
     path.push(file_name);
     fs::read_to_string(&path).expect(&format!("Failed to read {}", file_name))
 }

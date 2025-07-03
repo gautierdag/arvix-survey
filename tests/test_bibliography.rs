@@ -1,7 +1,82 @@
 use bibextract::latex::bibliography::{BibEntry, Bibliography};
+use bibextract::latex::clean_text;
 use std::collections::HashMap;
 use std::fs;
 use tempfile::tempdir;
+
+#[test]
+fn test_clean_text() {
+    assert_eq!(clean_text("-380"), "380");
+    assert_eq!(clean_text("Hello, World!"), "hello_world");
+    assert_eq!(clean_text("  Test   String  with spaces "), "test_string_with_spaces");
+    assert_eq!(clean_text("Another-Test_String.123"), "another_test_string_123");
+    assert_eq!(clean_text("UPPERCASE"), "uppercase");
+    assert_eq!(clean_text("mixedCase"), "mixedcase");
+    assert_eq!(clean_text("12345"), "12345");
+    assert_eq!(clean_text(" "), "");
+    assert_eq!(clean_text(""), "");
+}
+
+#[test]
+fn test_bib_entry_builder_fields() {
+    let fields = vec![("title", "Test Title"), ("author", "Test Author")];
+    let entry = BibEntry::builder("key1", "article")
+        .fields(fields)
+        .build();
+
+    assert_eq!(entry.key, "key1");
+    assert_eq!(entry.entry_type, "article");
+    assert_eq!(entry.get("title").unwrap(), "Test Title");
+    assert_eq!(entry.get("author").unwrap(), "Test Author");
+}
+
+#[test]
+fn test_bibliography_debug() {
+    let mut bib = Bibliography::new();
+    let entry1 = BibEntry::builder("key1", "article").build();
+    bib.insert(entry1);
+    let debug_str = format!("{:?}", bib);
+    assert!(debug_str.contains("entries_count: 1"));
+}
+
+#[test]
+fn test_parse_bbl_no_begin_thebibliography() {
+    let content = "This is not a bbl file.";
+    let bib = Bibliography::parse_bbl(content).unwrap();
+    assert!(bib.entries.is_empty());
+}
+
+#[test]
+fn test_parse_bibliography_files_parse_error() {
+    let dir = tempdir().unwrap();
+    let bbl_file = dir.path().join("test.bbl");
+    fs::write(&bbl_file, r#"\begin{thebibliography}{99}
+\bibitem{key1} Author A. (2020). Title A.
+\end{thebibliography}"#).unwrap();
+    let bib_files = vec![bbl_file];
+    let bib = Bibliography::parse_bibliography_files(&bib_files).unwrap();
+    assert_eq!(bib.entries.len(), 1);
+}
+
+#[test]
+fn test_normalize_citation_key_single_word_author() {
+    let bib = Bibliography::new();
+    let entry = BibEntry::builder("key1", "article")
+        .field("author", "Plato")
+        .field("title", "The Republic")
+        .field("year", "-380")
+        .build();
+    assert_eq!(bib.normalize_citation_key(&entry), "plato_republic_380");
+}
+
+#[test]
+fn test_normalize_citations_no_key_in_bib() {
+    let bib = Bibliography::new();
+    let content = r"This is a citation \cite{unknownkey}.";
+    let (normalized_content, key_map) = bib.normalize_citations(content).unwrap();
+    assert_eq!(normalized_content, content);
+    assert!(key_map.is_empty());
+}
 
 #[test]
 fn test_bib_entry_builder() {
@@ -128,13 +203,6 @@ fn test_extract_arxiv_id() {
     assert!(bib.extract_arxiv_id(&entry6).is_none());
 }
 
-// Mock reqwest for get_arxiv_bibtex test
-// This requires a more advanced mocking setup or a separate integration test
-// #[test]
-// fn test_get_arxiv_bibtex() {
-//     // Mock HTTP response for arXiv API
-//     // This is complex and might require a dedicated mocking library or approach
-// }
 
 #[test]
 fn test_normalize_citations() {

@@ -11,17 +11,22 @@ use walkdir::WalkDir;
 use zip::ZipArchive;
 use flate2::read::GzDecoder;
 use tar::Archive;
-use reqwest::blocking::Client;
+use reqwest::Client;
+use once_cell::sync::Lazy;
 
 use crate::latex::{Bibliography, ArxivPaper, citation};
 
-/// Download and process an arXiv paper
-pub fn download_arxiv_source(paper_id: &str) -> Result<ArxivPaper, BibExtractError> {
-    let client = Client::new();
-    let url = format!("https://arxiv.org/e-print/{}", paper_id);
+// Use a single, lazily-initialized reqwest::Client for all API calls
+static HTTP_CLIENT: Lazy<Client> = Lazy::new(Client::new);
+
+/// Download and process an arXiv paper (async version)
+pub async fn download_arxiv_source_async(paper_id: &str) -> Result<ArxivPaper, BibExtractError> {
+    // Support configurable base URL for testing
+    let base_url = std::env::var("ARXIV_BASE_URL").unwrap_or_else(|_| "https://arxiv.org".to_string());
+    let url = format!("{}/e-print/{}", base_url, paper_id);
 
     info!("Downloading source files from arXiv for paper: {}", paper_id);
-    let response = client.get(&url).send().map_err(|e| BibExtractError::NetworkError(e))?;
+    let response = HTTP_CLIENT.get(&url).send().await.map_err(|e| BibExtractError::NetworkError(e))?;
 
     if !response.status().is_success() {
         return Err(BibExtractError::ApiError(format!("Failed to download source: HTTP {}", response.status())));
@@ -33,7 +38,7 @@ pub fn download_arxiv_source(paper_id: &str) -> Result<ArxivPaper, BibExtractErr
 
     // Save the downloaded source to a temporary file
     let mut source_file = tempfile::tempfile().map_err(|e| BibExtractError::IoError(e))?;
-    let content = response.bytes().map_err(|e| BibExtractError::NetworkError(e))?;
+    let content = response.bytes().await.map_err(|e| BibExtractError::NetworkError(e))?;
     
     if content.is_empty() {
         return Err(BibExtractError::ApiError(format!("Received empty content from arXiv for paper ID: {}", paper_id)));
@@ -60,13 +65,13 @@ pub fn download_arxiv_source(paper_id: &str) -> Result<ArxivPaper, BibExtractErr
     // Extract sections from the full content
     let sections = citation::extract_sections_from_latex(&full_content, &bibliography)?;
 
-    // get title and authors from arvix/bibtex/id
-    let bibtex_url = format!("https://arxiv.org/bibtex/{}", paper_id);
-    let bibtex_response = client.get(&bibtex_url).send().map_err(|e| BibExtractError::NetworkError(e))?;
+    // Get title and authors from arXiv/bibtex/id
+    let bibtex_url = format!("{}/bibtex/{}", base_url, paper_id);
+    let bibtex_response = HTTP_CLIENT.get(&bibtex_url).send().await.map_err(|e| BibExtractError::NetworkError(e))?;
     if !bibtex_response.status().is_success() {
         return Err(BibExtractError::ApiError(format!("Failed to download BibTeX: HTTP {}", bibtex_response.status())));
     }
-    let bibtex_content = bibtex_response.text().map_err(|e| BibExtractError::NetworkError(e))?;
+    let bibtex_content = bibtex_response.text().await.map_err(|e| BibExtractError::NetworkError(e))?;
     
     // Extract title and authors from the BibTeX content
     let title_re = Regex::new(r"title\s*=\s*\{([\s\S]*?)\}").unwrap();
@@ -79,7 +84,7 @@ pub fn download_arxiv_source(paper_id: &str) -> Result<ArxivPaper, BibExtractErr
         .and_then(|cap| cap.get(1))
         .map_or("Unknown Authors".to_string(), |m| m.as_str().trim().to_string());
 
-    // shorten the title and authors if they are too long
+    // Shorten the title and authors if they are too long
     let max_length = 100;
     let title = if title.len() > max_length {
         format!("{}...", &title[..max_length - 3])

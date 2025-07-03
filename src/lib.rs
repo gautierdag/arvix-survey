@@ -19,8 +19,13 @@ fn extract_survey(paper_ids: Vec<String>) -> PyResult<PyObject> {
     // // Initialize logging with a minimal level to avoid spamming Python applications.
     // let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).try_init();
     Python::with_gil(|py| {
+        // Create a single tokio runtime for all async operations
+        let rt = tokio::runtime::Runtime::new().map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to create async runtime: {}", e))
+        })?;
+        
         // Process papers and handle any errors, converting them to Python exceptions.
-        match internal::extract_survey_internal(paper_ids) {
+        match rt.block_on(internal::extract_survey_internal(paper_ids)) {
             Ok((survey_text, bibtex)) => {
                 let dict = PyDict::new(py);
                 dict.set_item("survey_text", survey_text)?;
@@ -40,37 +45,45 @@ pub mod internal {
     use crate::latex;
     use crate::error::BibExtractError;
     use log::info;
-    use rayon::prelude::*;
 
     /// Internal function to process papers and return survey text and BibTeX.
     /// This is the core logic shared by the Python API and the CLI.
-    pub fn extract_survey_internal(paper_ids: Vec<String>) -> Result<(String, String), BibExtractError> {
+    pub async fn extract_survey_internal(paper_ids: Vec<String>) -> Result<(String, String), BibExtractError> {
         use latex::Bibliography;
 
         if paper_ids.is_empty() {
             return Err(BibExtractError::NoPaperIdsProvided);
         }
 
-        let all_papers: Vec<_> = paper_ids
-            .par_iter()
-            .with_max_len(4) // Limit parallel jobs to 4
+        // Process papers concurrently using tokio tasks
+        let paper_tasks: Vec<_> = paper_ids
+            .into_iter()
             .map(|paper_id| {
-                info!("Processing arXiv paper with ID: {}", paper_id);
-                let mut paper = latex::download_arxiv_source(paper_id)?;
+                tokio::spawn(async move {
+                    info!("Processing arXiv paper with ID: {}", paper_id);
+                    let mut paper = latex::download_arxiv_source_async(&paper_id).await?;
+                    
+                    info!("Verifying bibliography entries for paper {}", paper_id);
+                    let verified_count = paper.verify_bibliography().await?;
+                    info!(
+                        "Verified {}/{} entries for paper {} using async verification",
+                        verified_count,
+                        paper.bibliography.iter().count(),
+                        paper_id
+                    );
 
-                info!("Verifying bibliography entries for paper {}", paper_id);
-                let verified_count = paper.verify_bibliography()?;
-                info!(
-                    "Verified {}/{} entries for paper {} using parallel verification",
-                    verified_count,
-                    paper.bibliography.iter().count(),
-                    paper_id
-                );
-
-                info!("Found {} sections with bibliography entries", paper.sections.len());
-                Ok(paper)
+                    info!("Found {} sections with bibliography entries", paper.sections.len());
+                    Ok::<_, BibExtractError>(paper)
+                })
             })
-            .collect::<Result<Vec<_>, BibExtractError>>()?;
+            .collect();
+
+        // Wait for all papers to be processed
+        let mut all_papers = Vec::new();
+        for task in paper_tasks {
+            let paper = task.await.map_err(|e| BibExtractError::ApiError(format!("Task join error: {}", e)))??;
+            all_papers.push(paper);
+        }
 
         let mut consolidated_bibliography = Bibliography::new();
         // Merge bibliographies from all papers into a single consolidated one.

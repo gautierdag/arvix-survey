@@ -4,10 +4,10 @@ use bibextract::latex::{BibEntry, Bibliography};
 use bibextract::internal::format_bibliography_as_bibtex;
 use std::collections::HashMap;
 
-#[test]
-fn test_extract_survey_internal_no_paper_ids() {
+#[tokio::test]
+async fn test_extract_survey_internal_no_paper_ids() {
     let paper_ids: Vec<String> = Vec::new();
-    let result = extract_survey_internal(paper_ids);
+    let result = extract_survey_internal(paper_ids).await;
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err(), BibExtractError::NoPaperIdsProvided));
 }

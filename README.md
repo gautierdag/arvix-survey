@@ -11,7 +11,7 @@ What it does differently is that it extracts content directly from the LaTeX sou
 
 It also focuses entirely on survey/background/related work sections. Right now this tool will ignore all the other sections.
 
-Once it extracts the content, it also extracts looks at the BBL file and tries to reconstruct the .bibtex file and normalise the entries. Not all BBL files work (see the [tests/bbls](tests/bbls/) for examples). Once it has a title/author/year, it will try to look up the arXiv ID or DOI of the paper, and use that in the bibtex entry instead of the raw entry from the BBL file.
+Once it extracts the content, it also extracts looks at the BBL file and tries to reconstruct the .bibtex file and normalise the entries. Not all BBL files work (see the [tests/fixtures](tests/fixtures/) for examples). Once it has a title/author/year, it will try to look up the arXiv ID or DOI of the paper, and use that in the bibtex entry instead of the raw entry from the BBL file.
 
 This citation normalisation means that you can pass multiple papers to it and it will extract the related work content and bibliography from all of them, merging them into a single output, with limited overlap.
 
